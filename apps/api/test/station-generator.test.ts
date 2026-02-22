@@ -1,86 +1,107 @@
 import { describe, expect, it } from "vitest";
-import { StationRulesSchema } from "@music-cable-box/shared";
-import { scoreCandidate } from "../src/services/station-generator";
+import {
+  applyCandidateExclusions,
+  computeRecencyBoost,
+  scoreCandidate
+} from "../src/services/station-generator";
 
-const baseRules = StationRulesSchema.parse({});
+const now = new Date("2026-02-22T12:00:00.000Z");
 
-const trackTemplate = {
-  id: "local-track",
-  navidromeSongId: "song-1",
-  title: "Song 1",
-  artist: "The Artist",
-  album: "Album",
-  albumArtist: "The Artist",
-  genre: "Rock",
-  year: 2019,
-  durationSec: 180,
-  path: "/music/song.mp3",
-  coverArtId: "cover-1",
-  addedAt: new Date("2023-01-01T00:00:00.000Z"),
-  createdAt: new Date("2023-01-01T00:00:00.000Z"),
-  updatedAt: new Date("2023-01-01T00:00:00.000Z")
-};
+function buildTrack(input: {
+  navidromeSongId: string;
+  artist: string;
+}) {
+  return {
+    id: `local-${input.navidromeSongId}`,
+    navidromeSongId: input.navidromeSongId,
+    title: `Title ${input.navidromeSongId}`,
+    artist: input.artist,
+    album: "Album",
+    albumArtist: input.artist,
+    genre: "Rock",
+    year: 2020,
+    durationSec: 180,
+    path: `/music/${input.navidromeSongId}.mp3`,
+    coverArtId: null,
+    addedAt: new Date("2024-01-01T00:00:00.000Z"),
+    createdAt: new Date("2024-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2024-01-01T00:00:00.000Z")
+  };
+}
 
 describe("station scoring", () => {
-  it("prefers never-played and liked tracks over recently played/disliked", () => {
-    const favored = scoreCandidate({
-      track: {
-        ...trackTemplate,
-        navidromeSongId: "favored"
-      },
-      rules: baseRules,
-      recentArtistWindow: [],
-      lastPlayedAt: undefined,
-      feedback: {
-        liked: true,
-        disliked: false
-      },
-      seedSalt: "fixed-seed"
-    });
+  it("increases recency boost as last-played moves further into the past", () => {
+    const oneHourAgo = new Date(now.getTime() - 1 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const unfavored = scoreCandidate({
-      track: {
-        ...trackTemplate,
-        navidromeSongId: "unfavored"
-      },
-      rules: baseRules,
-      recentArtistWindow: [],
-      lastPlayedAt: new Date(),
-      feedback: {
-        liked: false,
-        disliked: true
-      },
-      seedSalt: "fixed-seed"
-    });
+    const boostRecent = computeRecencyBoost(oneHourAgo, now);
+    const boostOld = computeRecencyBoost(sevenDaysAgo, now);
 
-    expect(favored).toBeGreaterThan(unfavored);
+    expect(boostOld).toBeGreaterThan(boostRecent);
   });
 
-  it("penalizes tracks when the artist appears in the recent artist window", () => {
-    const noPenalty = scoreCandidate({
-      track: {
-        ...trackTemplate,
-        navidromeSongId: "no-penalty",
-        artist: "Unique Artist"
-      },
-      rules: baseRules,
-      recentArtistWindow: ["other artist"],
+  it("applies like/dislike and artist repetition weighting", () => {
+    const track = buildTrack({ navidromeSongId: "seeded-a", artist: "Artist A" });
+
+    const likedScore = scoreCandidate({
+      track,
       lastPlayedAt: undefined,
-      seedSalt: "fixed-seed"
+      feedback: { liked: true, disliked: false },
+      recentArtistNames: [],
+      artistSeparation: 3,
+      now,
+      seed: "fixed"
     });
 
-    const penalized = scoreCandidate({
-      track: {
-        ...trackTemplate,
-        navidromeSongId: "penalized",
-        artist: "Duplicate Artist"
-      },
-      rules: baseRules,
-      recentArtistWindow: ["duplicate artist"],
+    const dislikedAndRepeatedScore = scoreCandidate({
+      track,
       lastPlayedAt: undefined,
-      seedSalt: "fixed-seed"
+      feedback: { liked: false, disliked: true },
+      recentArtistNames: ["Artist A"],
+      artistSeparation: 3,
+      now,
+      seed: "fixed"
     });
 
-    expect(noPenalty).toBeGreaterThan(penalized);
+    expect(likedScore).toBeGreaterThan(dislikedAndRepeatedScore);
+  });
+});
+
+describe("candidate exclusions", () => {
+  it("excludes disallowed tracks and recently repeated artists when alternatives exist", () => {
+    const candidates = [
+      buildTrack({ navidromeSongId: "t1", artist: "Artist A" }),
+      buildTrack({ navidromeSongId: "t2", artist: "Artist B" }),
+      buildTrack({ navidromeSongId: "t3", artist: "Artist C" })
+    ];
+
+    const result = applyCandidateExclusions({
+      candidates,
+      disallowedTrackIds: new Set(["t2"]),
+      recentArtistNames: ["Artist A"],
+      artistSeparation: 3
+    });
+
+    expect(result.relaxedTrackExclusion).toBe(false);
+    expect(result.relaxedArtistExclusion).toBe(false);
+    expect(result.tracks.map((track) => track.navidromeSongId)).toEqual(["t3"]);
+  });
+
+  it("relaxes artist exclusion only when strict artist separation would empty the pool", () => {
+    const candidates = [
+      buildTrack({ navidromeSongId: "t1", artist: "Artist A" }),
+      buildTrack({ navidromeSongId: "t2", artist: "Artist A" })
+    ];
+
+    const result = applyCandidateExclusions({
+      candidates,
+      disallowedTrackIds: new Set(),
+      recentArtistNames: ["Artist A"],
+      artistSeparation: 3
+    });
+
+    expect(result.relaxedTrackExclusion).toBe(false);
+    expect(result.relaxedArtistExclusion).toBe(true);
+    expect(result.tracks).toHaveLength(2);
   });
 });

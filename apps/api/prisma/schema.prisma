@@ -48,6 +48,7 @@ model TrackCache {
 
   @@index([genre])
   @@index([year])
+  @@index([durationSec])
   @@index([artist])
   @@index([album])
   @@index([addedAt])
@@ -98,6 +99,8 @@ model PlayEvent {
   @@index([userId, playedAt])
   @@index([stationId, playedAt])
   @@index([navidromeSongId])
+  @@index([userId, navidromeSongId, playedAt])
+  @@index([stationId, navidromeSongId, playedAt])
 }
 
 model TrackFeedback {

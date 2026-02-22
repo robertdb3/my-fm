@@ -105,14 +105,19 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const station = await getStationById(request.appUser.id, id);
+      const body = request.body as { seed?: string } | undefined;
 
       if (!station) {
         return sendError(reply, 404, "NOT_FOUND", "Station not found");
       }
 
       try {
-        const nowPlaying = await advanceNextTrack(station.id, request.appUser.id);
-        const nextUp = await peekNextTracks(station.id, request.appUser.id, 10);
+        const nowPlaying = await advanceNextTrack(station.id, request.appUser.id, {
+          seed: body?.seed
+        });
+        const nextUp = await peekNextTracks(station.id, request.appUser.id, 10, {
+          seed: body?.seed
+        });
 
         return {
           nowPlaying,
@@ -145,6 +150,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
             previousTrackId?: string;
             listenSeconds?: number;
             skipped?: boolean;
+            seed?: string;
           }
         | undefined;
 
@@ -161,7 +167,9 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const track = await advanceNextTrack(station.id, request.appUser.id);
+        const track = await advanceNextTrack(station.id, request.appUser.id, {
+          seed: body?.seed
+        });
         return { track };
       } catch (error) {
         return sendError(reply, 400, "BAD_REQUEST", "Failed to get next track", {
@@ -184,12 +192,14 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
         return sendError(reply, 404, "NOT_FOUND", "Station not found");
       }
 
-      const query = request.query as { n?: string };
+      const query = request.query as { n?: string; seed?: string };
       const parsedN = Number(query.n ?? "10");
       const n = Number.isFinite(parsedN) ? Math.min(50, Math.max(1, parsedN)) : 10;
 
       try {
-        const tracks = await peekNextTracks(station.id, request.appUser.id, n);
+        const tracks = await peekNextTracks(station.id, request.appUser.id, n, {
+          seed: query.seed
+        });
         return {
           tracks
         };

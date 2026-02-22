@@ -138,7 +138,9 @@ Notes:
 ## Tests
 
 - Unit: station scoring logic
+- Unit: exclusion behavior for recent track/artist rules
 - Integration: stations happy path (`create -> list -> play`)
+- Integration: 50 sequential `next` calls with no duplicates in the 24h repeat window
 
 Run:
 
@@ -151,18 +153,31 @@ pnpm --filter @music-cable-box/api test
 For each next-track request:
 
 1. Load station rules and persisted station state.
-2. Build candidate set from `TrackCache` SQL filters.
-3. Exclude recent tracks by time window and station recent list.
-4. Score candidates with:
-   - base randomized component
-   - recency preference (less recently played gets higher score)
-   - liked/disliked feedback weighting
-   - artist separation penalty
-5. Select from top-K using weighted random.
-6. Persist station state and play event (`advance` path).
-7. Return track metadata + Navidrome stream URL.
+2. Build a dynamic SQL filter (`genre/artist/album includes/excludes`, `year`, `duration`, `recently added`) and fetch a bounded candidate pool (`~900` rows max).
+3. Exclude:
+   - tracks played in the station/user repeat window (default 24h)
+   - tracks in station recent-track state
+   - artists in the recent artist separation window (default 3)
+4. If strict exclusions empty the pool, relax in order:
+   - relax artist exclusion first
+   - then relax track exclusion only if required to avoid dead-end playback
+5. Score candidates with:
+   - `baseRandom` in `[0,1]`
+   - `recencyBoost = 1 - exp(-hoursSinceLastPlay / halfLifeHours)`
+   - `likeBoost = +0.5`
+   - `dislikePenalty = -1.0`
+   - `artistRepetitionPenalty` for recent artists
+6. Sort by score, take top-K (`200`), then weighted-random sample.
+7. Persist station state and play event (`advance` path).
+8. Return track metadata + Navidrome stream URL.
 
 `peek` runs the same logic in memory and does not persist station state.
+
+Performance notes:
+
+- Candidate pool is bounded and never loads full-library rows into memory.
+- Track/play-feedback lookups are scoped to candidate IDs only.
+- Short-lived per-station candidate cache reduces repeated SQL work under rapid skip/surf traffic.
 
 ## Known MVP Limitations
 

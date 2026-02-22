@@ -12,8 +12,8 @@ let prisma: PrismaClient;
 let authToken = "";
 let stationId = "";
 
-const tmpDir = mkdtempSync(join(tmpdir(), "music-cable-box-api-test-"));
-const dbPath = join(tmpDir, "test.db");
+const tmpDir = mkdtempSync(join(tmpdir(), "music-cable-box-api-seq-test-"));
+const dbPath = join(tmpDir, "test-seq.db");
 const databaseUrl = `file:${dbPath}`;
 const apiDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -74,33 +74,38 @@ beforeAll(async () => {
   });
 
   await prisma.trackCache.createMany({
-    data: [
-      {
-        navidromeSongId: "song-a",
-        title: "Song A",
-        artist: "Artist A",
-        album: "Album A",
-        genre: "Rock",
-        durationSec: 200
-      },
-      {
-        navidromeSongId: "song-b",
-        title: "Song B",
-        artist: "Artist B",
-        album: "Album B",
-        genre: "Rock",
-        durationSec: 210
-      },
-      {
-        navidromeSongId: "song-c",
-        title: "Song C",
-        artist: "Artist C",
-        album: "Album C",
-        genre: "Pop",
-        durationSec: 220
-      }
-    ]
+    data: Array.from({ length: 80 }).map((_, index) => ({
+      navidromeSongId: `rock-song-${index + 1}`,
+      title: `Rock Song ${index + 1}`,
+      artist: `Artist ${index + 1}`,
+      album: `Album ${Math.floor(index / 10) + 1}`,
+      genre: "Rock",
+      year: 2000 + (index % 20),
+      durationSec: 150 + index,
+      addedAt: new Date("2025-01-01T00:00:00.000Z")
+    }))
   });
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/api/stations",
+    headers: {
+      authorization: `Bearer ${authToken}`
+    },
+    payload: {
+      name: "Large Rock Pool",
+      description: "For non-repeat integration test",
+      rules: {
+        genresInclude: ["Rock"],
+        avoidRepeatHours: 24,
+        avoidSameArtistWithinTracks: 3
+      },
+      isEnabled: true
+    }
+  });
+
+  expect(createResponse.statusCode).toBe(201);
+  stationId = createResponse.json().station.id;
 });
 
 afterAll(async () => {
@@ -115,51 +120,24 @@ afterAll(async () => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe("stations endpoints", () => {
-  it("creates a station and starts playback", async () => {
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/api/stations",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
-      payload: {
-        name: "Rock Channel",
-        description: "Rock-heavy station",
-        rules: {
-          genresInclude: ["Rock"]
-        },
-        isEnabled: true
-      }
-    });
+describe("station generator sequential next", () => {
+  it("returns 50 sequential next tracks without duplicates inside 24h window", async () => {
+    const seenTrackIds: string[] = [];
 
-    expect(createResponse.statusCode).toBe(201);
-    stationId = createResponse.json().station.id;
+    for (let i = 0; i < 50; i += 1) {
+      const nextResponse = await app.inject({
+        method: "POST",
+        url: `/api/stations/${stationId}/next`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
 
-    const listResponse = await app.inject({
-      method: "GET",
-      url: "/api/stations",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
-    });
+      expect(nextResponse.statusCode).toBe(200);
+      seenTrackIds.push(nextResponse.json().track.navidromeSongId);
+    }
 
-    expect(listResponse.statusCode).toBe(200);
-    expect(listResponse.json().stations).toHaveLength(1);
-
-    const playResponse = await app.inject({
-      method: "POST",
-      url: `/api/stations/${stationId}/play`,
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
-    });
-
-    expect(playResponse.statusCode).toBe(200);
-    const payload = playResponse.json();
-
-    expect(payload.nowPlaying).toBeDefined();
-    expect(payload.nowPlaying.streamUrl).toContain("/rest/stream.view");
-    expect(payload.nextUp.length).toBeGreaterThan(0);
+    const unique = new Set(seenTrackIds);
+    expect(unique.size).toBe(50);
   });
 });
