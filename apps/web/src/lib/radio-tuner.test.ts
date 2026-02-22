@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { clampTunerIndex, RADIO_TUNE_DEBOUNCE_MS, stepTunerIndex } from "./radio-tuner";
+import {
+  clampTunerIndex,
+  nextScanStep,
+  RADIO_SCAN_INTERVAL_MS,
+  RADIO_TUNE_DEBOUNCE_MS,
+  stepTunerIndex
+} from "./radio-tuner";
 
 describe("radio tuner helpers", () => {
   it("clamps tuner index safely", () => {
@@ -16,5 +22,12 @@ describe("radio tuner helpers", () => {
 
   it("uses the expected debounce delay for drag tuning", () => {
     expect(RADIO_TUNE_DEBOUNCE_MS).toBe(250);
+  });
+
+  it("scan steps to the next station and signals station playback", () => {
+    const step = nextScanStep(3, 8);
+    expect(step.action).toBe("PLAY_STATION");
+    expect(step.nextIndex).toBe(4);
+    expect(RADIO_SCAN_INTERVAL_MS).toBe(2000);
   });
 });

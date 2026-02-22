@@ -2,10 +2,13 @@ import type {
   CreateStationInput,
   FeedbackInput,
   NavidromeConnectionInput,
+  NextPlayback,
   Station,
+  StationPlayback,
   StationSystemType,
   StationRules,
-  Track
+  Track,
+  TunerStepResponse
 } from "@music-cable-box/shared";
 import type { TunerStation } from "@music-cable-box/shared";
 
@@ -181,9 +184,36 @@ export async function deleteStationApi(stationId: string, token?: string | null)
   });
 }
 
-export async function startStation(stationId: string, token?: string | null) {
-  return apiRequest<{ nowPlaying: Track; nextUp: Track[]; station: Station }>(`/api/stations/${stationId}/play`, {
+export async function startStation(
+  stationId: string,
+  token?: string | null,
+  payload?: {
+    seed?: string;
+    reason?: "manual" | "resume";
+  }
+) {
+  return apiRequest<{ nowPlaying: Track; nextUp: Track[]; station: Station; playback: StationPlayback }>(
+    `/api/stations/${stationId}/play`,
+    {
+      method: "POST",
+      body: payload ?? {},
+      token
+    }
+  );
+}
+
+export async function stepTuner(
+  token?: string | null,
+  payload?: {
+    direction: "NEXT" | "PREV";
+    fromStationId?: string;
+    wrap?: boolean;
+    play?: boolean;
+  }
+) {
+  return apiRequest<TunerStepResponse>("/api/tuner/step", {
     method: "POST",
+    body: payload ?? { direction: "NEXT", wrap: true, play: true },
     token
   });
 }
@@ -195,11 +225,13 @@ export async function nextStationTrack(
     previousTrackId?: string;
     listenSeconds?: number;
     skipped?: boolean;
+    previousStartOffsetSec?: number;
+    previousReason?: string;
   }
 ) {
-  return apiRequest<{ track: Track }>(`/api/stations/${stationId}/next`, {
+  return apiRequest<{ track: Track; playback?: NextPlayback }>(`/api/stations/${stationId}/next`, {
     method: "POST",
-    body: payload,
+    body: payload ?? {},
     token
   });
 }

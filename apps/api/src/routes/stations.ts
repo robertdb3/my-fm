@@ -4,6 +4,7 @@ import {
   PatchStationSchema,
   StationRulesSchema,
   SystemRegenerateInputSchema,
+  TunerStepInputSchema,
   UpdateStationSchema
 } from "@music-cable-box/shared";
 import { prisma } from "../db";
@@ -22,6 +23,23 @@ import { regenerateSystemStations } from "../services/station-auto-generator";
 
 export const stationRoutes: FastifyPluginAsync = async (app) => {
   const parseBoolean = (value: string | undefined): boolean => value === "true" || value === "1";
+  const stepIndex = (
+    currentIndex: number,
+    direction: "NEXT" | "PREV",
+    stationCount: number,
+    wrap: boolean
+  ) => {
+    if (stationCount <= 0) {
+      return 0;
+    }
+
+    const delta = direction === "NEXT" ? 1 : -1;
+    if (wrap) {
+      return (currentIndex + delta + stationCount) % stationCount;
+    }
+
+    return Math.min(stationCount - 1, Math.max(0, currentIndex + delta));
+  };
 
   app.get(
     "/api/stations",
@@ -66,6 +84,75 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
     async (request) => {
       const stations = await listTunerStations(request.appUser.id);
       return { stations };
+    }
+  );
+
+  app.post(
+    "/api/tuner/step",
+    {
+      preHandler: app.authenticate
+    },
+    async (request, reply) => {
+      const parsed = TunerStepInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendError(reply, 400, "BAD_REQUEST", "Invalid tuner step payload", parsed.error.flatten());
+      }
+
+      const tunerStations = await listTunerStations(request.appUser.id);
+      if (tunerStations.length === 0) {
+        return sendError(reply, 404, "NOT_FOUND", "No tuner stations available");
+      }
+
+      const fromIndex = parsed.data.fromStationId
+        ? tunerStations.findIndex((station) => station.id === parsed.data.fromStationId)
+        : -1;
+
+      const currentIndex =
+        fromIndex >= 0 ? fromIndex : parsed.data.direction === "NEXT" ? -1 : 0;
+      const targetIndex = stepIndex(
+        currentIndex,
+        parsed.data.direction,
+        tunerStations.length,
+        parsed.data.wrap
+      );
+      const targetStation = tunerStations[targetIndex];
+
+      if (!targetStation) {
+        return sendError(reply, 404, "NOT_FOUND", "Target tuner station not found");
+      }
+
+      if (!parsed.data.play) {
+        return {
+          station: targetStation
+        };
+      }
+
+      const station = await getStationById(request.appUser.id, targetStation.id);
+      if (!station) {
+        return sendError(reply, 404, "NOT_FOUND", "Station not found");
+      }
+
+      if (!station.isEnabled) {
+        return sendError(reply, 400, "BAD_REQUEST", "Station is disabled");
+      }
+
+      try {
+        const result = await advanceNextTrack(station.id, request.appUser.id, {
+          reason: "manual"
+        });
+        const nextUp = await peekNextTracks(station.id, request.appUser.id, 10);
+
+        return {
+          station: targetStation,
+          nowPlaying: result.track,
+          nextUp,
+          playback: result.playback
+        };
+      } catch (error) {
+        return sendError(reply, 400, "BAD_REQUEST", "Failed to tune station", {
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
     }
   );
 
@@ -316,7 +403,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const station = await getStationById(request.appUser.id, id);
-      const body = request.body as { seed?: string } | undefined;
+      const body = (request.body ?? {}) as { seed?: string; reason?: "manual" | "resume" };
 
       if (!station) {
         return sendError(reply, 404, "NOT_FOUND", "Station not found");
@@ -324,16 +411,18 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
       try {
         const nowPlaying = await advanceNextTrack(station.id, request.appUser.id, {
-          seed: body?.seed
+          seed: body.seed,
+          reason: body.reason ?? "manual"
         });
         const nextUp = await peekNextTracks(station.id, request.appUser.id, 10, {
-          seed: body?.seed
+          seed: body.seed
         });
 
         return {
-          nowPlaying,
+          nowPlaying: nowPlaying.track,
           nextUp,
-          station
+          station,
+          playback: nowPlaying.playback
         };
       } catch (error) {
         return sendError(reply, 400, "BAD_REQUEST", "Failed to start station", {
@@ -362,26 +451,35 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
             listenSeconds?: number;
             skipped?: boolean;
             seed?: string;
+            previousStartOffsetSec?: number;
+            previousReason?: string;
           }
         | undefined;
+      const payload = body ?? {};
 
-      if (body?.previousTrackId) {
+      if (payload.previousTrackId) {
         await prisma.playEvent.create({
           data: {
             userId: request.appUser.id,
             stationId: station.id,
-            navidromeSongId: body.previousTrackId,
-            skipped: body.skipped ?? true,
-            listenSeconds: body.listenSeconds ?? null
+            navidromeSongId: payload.previousTrackId,
+            skipped: payload.skipped ?? true,
+            listenSeconds: payload.listenSeconds ?? null,
+            startOffsetSec: payload.previousStartOffsetSec ?? null,
+            reason: payload.previousReason ?? null
           }
         });
       }
 
       try {
         const track = await advanceNextTrack(station.id, request.appUser.id, {
-          seed: body?.seed
+          seed: payload.seed,
+          reason: "next"
         });
-        return { track };
+        return {
+          track: track.track,
+          playback: track.playback.reason === "next" ? track.playback : undefined
+        };
       } catch (error) {
         return sendError(reply, 400, "BAD_REQUEST", "Failed to get next track", {
           message: error instanceof Error ? error.message : "Unknown error"

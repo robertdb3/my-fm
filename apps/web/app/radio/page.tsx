@@ -7,10 +7,29 @@ import {
   nextStationTrack,
   peekStation,
   saveFeedback,
-  startStation
+  startStation,
+  stepTuner
 } from "../../src/lib/api";
-import { clampTunerIndex, RADIO_TUNE_DEBOUNCE_MS, stepTunerIndex } from "../../src/lib/radio-tuner";
+import { clampTunerIndex, RADIO_SCAN_INTERVAL_MS, RADIO_TUNE_DEBOUNCE_MS } from "../../src/lib/radio-tuner";
 import { useRequireAuth } from "../../src/lib/useRequireAuth";
+
+interface PlaybackMeta {
+  startOffsetSec: number;
+  reason: string;
+}
+
+function clampStartOffset(track: Track, startOffsetSec: number): number {
+  const durationSec = track.durationSec ?? 0;
+  if (!Number.isFinite(startOffsetSec) || startOffsetSec <= 0) {
+    return 0;
+  }
+
+  if (!Number.isFinite(durationSec) || durationSec <= 1) {
+    return Math.floor(startOffsetSec);
+  }
+
+  return Math.max(0, Math.min(Math.floor(startOffsetSec), Math.floor(durationSec) - 1));
+}
 
 export default function RadioPage() {
   const token = useRequireAuth();
@@ -19,6 +38,7 @@ export default function RadioPage() {
   const [currentStationId, setCurrentStationId] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [nextUp, setNextUp] = useState<Track[]>([]);
+  const [currentPlayback, setCurrentPlayback] = useState<PlaybackMeta | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -26,9 +46,20 @@ export default function RadioPage() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const tuneTimeoutRef = useRef<number | null>(null);
-  const lastTunedStationIdRef = useRef<string | null>(null);
+  const scanIntervalRef = useRef<number | null>(null);
+  const currentIndexRef = useRef(0);
+  const currentStationIdRef = useRef<string | null>(null);
+  const switchRequestIdRef = useRef(0);
 
   const currentStation = useMemo(() => stations[currentIndex] ?? null, [currentIndex, stations]);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    currentStationIdRef.current = currentStationId;
+  }, [currentStationId]);
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -37,6 +68,12 @@ export default function RadioPage() {
     audio.addEventListener("ended", onEnded);
 
     return () => {
+      if (tuneTimeoutRef.current !== null) {
+        window.clearTimeout(tuneTimeoutRef.current);
+      }
+      if (scanIntervalRef.current !== null) {
+        window.clearInterval(scanIntervalRef.current);
+      }
       audio.pause();
       audio.removeEventListener("ended", onEnded);
       audioRef.current = null;
@@ -52,6 +89,7 @@ export default function RadioPage() {
       try {
         const items = await getTunerStations(token);
         setStations(items);
+        setCurrentIndex((value) => clampTunerIndex(value, items.length));
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load tuner stations");
@@ -64,71 +102,199 @@ export default function RadioPage() {
   }, [token]);
 
   useEffect(() => {
-    if (!nowPlaying || !audioRef.current) {
-      return;
-    }
-
-    audioRef.current.src = nowPlaying.streamUrl;
-    audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-  }, [nowPlaying]);
-
-  useEffect(() => {
     if (stations.length === 0) {
       return;
     }
 
     setCurrentIndex((value) => clampTunerIndex(value, stations.length));
-  }, [currentIndex, stations.length]);
+  }, [stations.length]);
 
-  useEffect(() => {
-    if (!isScanning || stations.length === 0) {
+  function beginSwitchRequest(): number {
+    switchRequestIdRef.current += 1;
+    return switchRequestIdRef.current;
+  }
+
+  function isLatestSwitchRequest(requestId: number): boolean {
+    return requestId === switchRequestIdRef.current;
+  }
+
+  async function waitForMetadata(audio: HTMLAudioElement): Promise<void> {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
       return;
     }
 
-    const interval = window.setInterval(() => {
-      tuneByDelta(1, true);
-    }, 2000);
+    await new Promise<void>((resolve, reject) => {
+      const onLoaded = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error("Failed to load audio metadata"));
+      };
+      const cleanup = () => {
+        audio.removeEventListener("loadedmetadata", onLoaded);
+        audio.removeEventListener("canplay", onLoaded);
+        audio.removeEventListener("error", onError);
+      };
 
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [isScanning, stations.length]);
-
-  if (!token) {
-    return <section className="card">Checking auth...</section>;
+      audio.addEventListener("loadedmetadata", onLoaded);
+      audio.addEventListener("canplay", onLoaded);
+      audio.addEventListener("error", onError);
+    });
   }
 
-  async function tuneToIndex(targetIndex: number) {
+  async function playTrack(track: Track, startOffsetSec: number, requestId: number) {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    audio.pause();
+    audio.src = track.streamUrl;
+    audio.load();
+
+    try {
+      await waitForMetadata(audio);
+    } catch {
+      if (!isLatestSwitchRequest(requestId)) {
+        return;
+      }
+    }
+
+    if (!isLatestSwitchRequest(requestId)) {
+      return;
+    }
+
+    const clampedOffset = clampStartOffset(track, startOffsetSec);
+    if (clampedOffset > 0) {
+      try {
+        audio.currentTime = clampedOffset;
+      } catch {
+        // ignore seek failures before the first playable frame
+      }
+    }
+
+    try {
+      await audio.play();
+      if (isLatestSwitchRequest(requestId)) {
+        setIsPlaying(true);
+      }
+    } catch {
+      if (isLatestSwitchRequest(requestId)) {
+        setIsPlaying(false);
+        setStatus("Autoplay blocked. Press Play to start audio.");
+      }
+    }
+  }
+
+  async function tuneToStationIndex(targetIndex: number) {
     const station = stations[targetIndex];
     if (!station) {
-      return;
+      return false;
     }
 
     if (!station.isEnabled) {
       setError("Station is disabled and cannot be tuned.");
-      return;
+      return false;
     }
 
-    if (lastTunedStationIdRef.current === station.id && currentStationId === station.id) {
-      return;
+    if (currentStationIdRef.current === station.id) {
+      setCurrentIndex(targetIndex);
+      return true;
     }
 
+    const requestId = beginSwitchRequest();
+    setCurrentIndex(targetIndex);
     setStatus(`Tuning ${station.frequencyLabel}...`);
     setError(null);
 
     try {
-      const response = await startStation(station.id, token);
+      const response = await startStation(station.id, token, { reason: "manual" });
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
       setCurrentStationId(station.id);
       setNowPlaying(response.nowPlaying);
       setNextUp(response.nextUp);
+      setCurrentPlayback(response.playback);
+      await playTrack(response.nowPlaying, response.playback.startOffsetSec, requestId);
+
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
       setStatus(`Locked on ${station.frequencyLabel} • ${station.name}`);
-      lastTunedStationIdRef.current = station.id;
+      return true;
     } catch (err) {
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
       setError(err instanceof Error ? err.message : "Failed to tune station");
+      return false;
+    }
+  }
+
+  async function stepStation(direction: "NEXT" | "PREV") {
+    if (stations.length === 0) {
+      return false;
+    }
+
+    const requestId = beginSwitchRequest();
+    setError(null);
+
+    try {
+      const response = await stepTuner(token, {
+        direction,
+        fromStationId: currentStationIdRef.current ?? stations[currentIndexRef.current]?.id,
+        wrap: true,
+        play: true
+      });
+
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
+      setCurrentIndex(response.station.tunerIndex);
+      setCurrentStationId(response.station.id);
+      setStatus(`Locked on ${response.station.frequencyLabel} • ${response.station.name}`);
+
+      if (response.nowPlaying) {
+        setNowPlaying(response.nowPlaying);
+      }
+      if (response.nextUp) {
+        setNextUp(response.nextUp);
+      }
+      if (response.playback) {
+        setCurrentPlayback(response.playback);
+      }
+
+      if (response.nowPlaying && response.playback) {
+        await playTrack(response.nowPlaying, response.playback.startOffsetSec, requestId);
+      }
+
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
+      setError(err instanceof Error ? err.message : "Failed to step tuner");
+      return false;
     }
   }
 
   function scheduleTune(targetIndex: number, immediate: boolean) {
+    if (isScanning) {
+      setIsScanning(false);
+    }
+
     if (tuneTimeoutRef.current !== null) {
       window.clearTimeout(tuneTimeoutRef.current);
       tuneTimeoutRef.current = null;
@@ -136,42 +302,79 @@ export default function RadioPage() {
 
     setCurrentIndex(targetIndex);
     if (immediate) {
-      void tuneToIndex(targetIndex);
+      void tuneToStationIndex(targetIndex);
       return;
     }
 
     tuneTimeoutRef.current = window.setTimeout(() => {
-      void tuneToIndex(targetIndex);
+      void tuneToStationIndex(targetIndex);
       tuneTimeoutRef.current = null;
     }, RADIO_TUNE_DEBOUNCE_MS);
   }
 
-  function tuneByDelta(delta: number, immediate = true) {
-    if (stations.length === 0) {
+  useEffect(() => {
+    if (!isScanning || stations.length === 0) {
+      if (scanIntervalRef.current !== null) {
+        window.clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
       return;
     }
 
-    const nextIndex = stepTunerIndex(currentIndex, delta, stations.length);
-    scheduleTune(nextIndex, immediate);
-  }
+    if (scanIntervalRef.current !== null) {
+      window.clearInterval(scanIntervalRef.current);
+    }
+
+    scanIntervalRef.current = window.setInterval(() => {
+      void stepStation("NEXT").then((success) => {
+        if (!success) {
+          setIsScanning(false);
+        }
+      });
+    }, RADIO_SCAN_INTERVAL_MS);
+
+    return () => {
+      if (scanIntervalRef.current !== null) {
+        window.clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+    };
+  }, [isScanning, stations.length, token]);
 
   async function onNextTrack() {
     if (!currentStationId) {
       return;
     }
 
+    if (isScanning) {
+      setIsScanning(false);
+    }
+
     try {
       const listenSeconds = Math.floor(audioRef.current?.currentTime ?? 0);
+      const requestId = beginSwitchRequest();
       const [nextResponse, peekResponse] = await Promise.all([
         nextStationTrack(currentStationId, token, {
           previousTrackId: nowPlaying?.navidromeSongId,
           listenSeconds,
-          skipped: true
+          skipped: true,
+          previousStartOffsetSec: currentPlayback?.startOffsetSec ?? 0,
+          previousReason: currentPlayback?.reason
         }),
         peekStation(currentStationId, 10, token)
       ]);
+
+      if (!isLatestSwitchRequest(requestId)) {
+        return;
+      }
+
       setNowPlaying(nextResponse.track);
+      setCurrentPlayback({
+        startOffsetSec: nextResponse.playback?.startOffsetSec ?? 0,
+        reason: nextResponse.playback?.reason ?? "next"
+      });
       setNextUp(peekResponse.tracks);
+      await playTrack(nextResponse.track, nextResponse.playback?.startOffsetSec ?? 0, requestId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to skip track");
     }
@@ -212,6 +415,10 @@ export default function RadioPage() {
     }
   }
 
+  if (!token) {
+    return <section className="card">Checking auth...</section>;
+  }
+
   return (
     <div className="grid">
       <section className="card" style={{ gridColumn: "span 7" }}>
@@ -222,6 +429,7 @@ export default function RadioPage() {
             <div className="tuner-display">
               <p className="tuner-frequency">{currentStation.frequencyLabel}</p>
               <p className="tuner-station">{currentStation.name}</p>
+              {isScanning ? <p className="meta">Scanning...</p> : null}
             </div>
 
             <input
@@ -233,16 +441,30 @@ export default function RadioPage() {
               onChange={(event) => {
                 scheduleTune(Number(event.target.value), false);
               }}
-              onMouseUp={() => scheduleTune(currentIndex, true)}
-              onTouchEnd={() => scheduleTune(currentIndex, true)}
+              onMouseUp={() => scheduleTune(currentIndexRef.current, true)}
+              onTouchEnd={() => scheduleTune(currentIndexRef.current, true)}
               disabled={stations.length === 0}
             />
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.8rem" }}>
-              <button type="button" onClick={() => tuneByDelta(-1, true)} disabled={stations.length === 0}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScanning(false);
+                  void stepStation("PREV");
+                }}
+                disabled={stations.length === 0}
+              >
                 ◀ Seek
               </button>
-              <button type="button" onClick={() => tuneByDelta(1, true)} disabled={stations.length === 0}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScanning(false);
+                  void stepStation("NEXT");
+                }}
+                disabled={stations.length === 0}
+              >
                 Seek ▶
               </button>
               <button

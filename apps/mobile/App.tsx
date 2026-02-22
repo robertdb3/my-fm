@@ -22,11 +22,17 @@ import {
   nextTrack,
   peekStation,
   playStation,
+  stepTuner,
   submitFeedback,
   testNavidrome
 } from "./src/api/client";
 
 type Screen = "stations" | "radio" | "player" | "settings";
+
+interface PlaybackMeta {
+  startOffsetSec: number;
+  reason: string;
+}
 
 interface TunerSliderProps {
   value: number;
@@ -118,14 +124,19 @@ export default function App() {
   const [scanEnabled, setScanEnabled] = useState(false);
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [nextUp, setNextUp] = useState<Track[]>([]);
+  const [currentPlayback, setCurrentPlayback] = useState<PlaybackMeta | null>(null);
 
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
   const tuneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastTunedStationIdRef = useRef<string | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const switchRequestIdRef = useRef(0);
+  const currentTunerIndexRef = useRef(0);
+  const currentStationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -142,13 +153,16 @@ export default function App() {
       if (tuneTimeoutRef.current) {
         clearTimeout(tuneTimeoutRef.current);
       }
-      if (sound) {
-        sound.unloadAsync().catch(() => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {
           // no-op
         });
       }
     };
-  }, [sound]);
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -178,6 +192,18 @@ export default function App() {
   );
 
   useEffect(() => {
+    currentTunerIndexRef.current = currentTunerIndex;
+  }, [currentTunerIndex]);
+
+  useEffect(() => {
+    currentStationIdRef.current = currentStationId;
+  }, [currentStationId]);
+
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
+
+  useEffect(() => {
     if (tunerStations.length === 0) {
       return;
     }
@@ -188,42 +214,91 @@ export default function App() {
   }, [currentTunerIndex, tunerStations.length]);
 
   useEffect(() => {
-    if (!scanEnabled || tunerStations.length === 0) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      tuneByDelta(1, true);
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [scanEnabled, tunerStations.length, currentTunerIndex]);
-
-  useEffect(() => {
     if (screen !== "radio" && scanEnabled) {
       setScanEnabled(false);
     }
   }, [scanEnabled, screen]);
 
-  async function playTrack(track: Track) {
-    if (sound) {
-      await sound.unloadAsync().catch(() => {
+  useEffect(() => {
+    if (!scanEnabled || tunerStations.length === 0 || screen !== "radio" || !token) {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      return;
+    }
+
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+    }
+
+    scanIntervalRef.current = setInterval(() => {
+      void stepStation("NEXT").then((success) => {
+        if (!success) {
+          setScanEnabled(false);
+        }
+      });
+    }, 2000);
+
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+    };
+  }, [scanEnabled, screen, token, tunerStations.length]);
+
+  function beginSwitchRequest() {
+    switchRequestIdRef.current += 1;
+    return switchRequestIdRef.current;
+  }
+
+  function isLatestSwitchRequest(requestId: number) {
+    return requestId === switchRequestIdRef.current;
+  }
+
+  async function playTrack(track: Track, startOffsetSec: number, requestId: number) {
+    if (soundRef.current) {
+      await soundRef.current.unloadAsync().catch(() => {
         // no-op
       });
     }
+
+    const initialPositionMillis = Math.max(0, Math.floor(startOffsetSec * 1000));
 
     const { sound: createdSound } = await Audio.Sound.createAsync(
       {
         uri: track.streamUrl
       },
       {
-        shouldPlay: true
+        shouldPlay: false,
+        positionMillis: initialPositionMillis
       }
     );
 
+    if (!isLatestSwitchRequest(requestId)) {
+      await createdSound.unloadAsync().catch(() => {
+        // no-op
+      });
+      return;
+    }
+
+    let started = true;
+    await createdSound.playAsync().catch(() => {
+      started = false;
+    });
+
+    if (!isLatestSwitchRequest(requestId)) {
+      await createdSound.unloadAsync().catch(() => {
+        // no-op
+      });
+      return;
+    }
+
+    soundRef.current = createdSound;
     setSound(createdSound);
     setNowPlaying(track);
-    setIsPlaying(true);
+    setIsPlaying(started);
   }
 
   async function onLogin() {
@@ -264,14 +339,33 @@ export default function App() {
       return;
     }
 
+    const station = stationMap.get(stationId);
+    if (station && !station.isEnabled) {
+      setError("Station is disabled.");
+      return;
+    }
+
+    if (currentStationIdRef.current === stationId) {
+      if (options?.tunerIndex !== undefined) {
+        setCurrentTunerIndex(options.tunerIndex);
+      }
+      return;
+    }
+
+    const requestId = beginSwitchRequest();
     setError(null);
     setStatus("Loading channel...");
 
     try {
-      const response = await playStation(stationId, token);
+      const response = await playStation(stationId, token, { reason: "manual" });
+      if (!isLatestSwitchRequest(requestId)) {
+        return;
+      }
+
       setCurrentStationId(stationId);
       setNextUp(response.nextUp);
-      await playTrack(response.nowPlaying);
+      setCurrentPlayback(response.playback);
+      await playTrack(response.nowPlaying, response.playback.startOffsetSec, requestId);
 
       if (options?.tunerIndex !== undefined) {
         setCurrentTunerIndex(options.tunerIndex);
@@ -287,13 +381,13 @@ export default function App() {
       }
 
       setStatus(`Now playing ${stationMap.get(stationId)?.name ?? "station"}`);
-      lastTunedStationIdRef.current = stationId;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start station");
     }
   }
 
   async function onSurfStation(stationId: string) {
+    setScanEnabled(false);
     await tuneToStation(stationId, { openPlayer: true });
   }
 
@@ -310,10 +404,6 @@ export default function App() {
       return;
     }
 
-    if (lastTunedStationIdRef.current === station.id && currentStationId === station.id) {
-      return;
-    }
-
     await tuneToStation(station.id, {
       tunerIndex: index,
       openPlayer: false
@@ -321,6 +411,10 @@ export default function App() {
   }
 
   function scheduleTune(index: number, immediate: boolean) {
+    if (scanEnabled) {
+      setScanEnabled(false);
+    }
+
     if (tuneTimeoutRef.current) {
       clearTimeout(tuneTimeoutRef.current);
       tuneTimeoutRef.current = null;
@@ -338,13 +432,58 @@ export default function App() {
     }, 250);
   }
 
-  function tuneByDelta(delta: number, immediate = true) {
-    if (tunerStations.length === 0) {
-      return;
+  async function stepStation(direction: "NEXT" | "PREV") {
+    if (!token || tunerStations.length === 0) {
+      return false;
     }
 
-    const nextIndex = (currentTunerIndex + delta + tunerStations.length) % tunerStations.length;
-    scheduleTune(nextIndex, immediate);
+    const requestId = beginSwitchRequest();
+    setError(null);
+
+    try {
+      const response = await stepTuner(token, {
+        direction,
+        fromStationId: currentStationIdRef.current ?? tunerStations[currentTunerIndexRef.current]?.id,
+        wrap: true,
+        play: true
+      });
+
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
+      setCurrentTunerIndex(response.station.tunerIndex);
+      setCurrentStationId(response.station.id);
+      setStatus(`Locked on ${response.station.frequencyLabel} • ${response.station.name}`);
+
+      if (response.nowPlaying) {
+        setNowPlaying(response.nowPlaying);
+      }
+      if (response.nextUp) {
+        setNextUp(response.nextUp);
+      }
+      if (response.playback) {
+        setCurrentPlayback(response.playback);
+      }
+
+      if (response.nowPlaying && response.playback) {
+        await playTrack(response.nowPlaying, response.playback.startOffsetSec, requestId);
+      }
+
+      return true;
+    } catch (err) {
+      if (!isLatestSwitchRequest(requestId)) {
+        return false;
+      }
+
+      setError(err instanceof Error ? err.message : "Failed to step tuner");
+      return false;
+    }
+  }
+
+  function tuneByDelta(delta: number) {
+    setScanEnabled(false);
+    void stepStation(delta >= 0 ? "NEXT" : "PREV");
   }
 
   async function onNext() {
@@ -352,24 +491,39 @@ export default function App() {
       return;
     }
 
+    if (scanEnabled) {
+      setScanEnabled(false);
+    }
+
     try {
       let listenSeconds = 0;
-      if (sound) {
-        const playbackStatus = await sound.getStatusAsync();
+      if (soundRef.current) {
+        const playbackStatus = await soundRef.current.getStatusAsync();
         if (playbackStatus.isLoaded) {
           listenSeconds = Math.floor(playbackStatus.positionMillis / 1000);
         }
       }
 
+      const requestId = beginSwitchRequest();
       const [nextResponse, peekResponse] = await Promise.all([
         nextTrack(currentStationId, token, {
           previousTrackId: nowPlaying?.navidromeSongId,
           listenSeconds,
-          skipped: true
+          skipped: true,
+          previousStartOffsetSec: currentPlayback?.startOffsetSec ?? 0,
+          previousReason: currentPlayback?.reason
         }),
         peekStation(currentStationId, token)
       ]);
-      await playTrack(nextResponse.track);
+      if (!isLatestSwitchRequest(requestId)) {
+        return;
+      }
+
+      setCurrentPlayback({
+        startOffsetSec: nextResponse.playback?.startOffsetSec ?? 0,
+        reason: nextResponse.playback?.reason ?? "next"
+      });
+      await playTrack(nextResponse.track, nextResponse.playback?.startOffsetSec ?? 0, requestId);
       setNextUp(peekResponse.tracks);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load next track");
@@ -377,20 +531,20 @@ export default function App() {
   }
 
   async function onTogglePlayPause() {
-    if (!sound) {
+    if (!soundRef.current) {
       return;
     }
 
-    const playbackStatus = await sound.getStatusAsync();
+    const playbackStatus = await soundRef.current.getStatusAsync();
     if (!playbackStatus.isLoaded) {
       return;
     }
 
     if (playbackStatus.isPlaying) {
-      await sound.pauseAsync();
+      await soundRef.current.pauseAsync();
       setIsPlaying(false);
     } else {
-      await sound.playAsync();
+      await soundRef.current.playAsync();
       setIsPlaying(true);
     }
   }
@@ -529,6 +683,7 @@ export default function App() {
               <>
                 <Text style={styles.tunerFrequency}>{currentTunerStation.frequencyLabel}</Text>
                 <Text style={styles.meta}>{currentTunerStation.name}</Text>
+                {scanEnabled ? <Text style={styles.meta}>Scanning...</Text> : null}
                 <TunerSlider
                   value={currentTunerIndex}
                   min={0}
@@ -537,10 +692,10 @@ export default function App() {
                   onComplete={(value) => scheduleTune(value, true)}
                 />
                 <View style={styles.row}>
-                  <TouchableOpacity style={styles.button} onPress={() => tuneByDelta(-1, true)}>
+                  <TouchableOpacity style={styles.button} onPress={() => tuneByDelta(-1)}>
                     <Text>◀ Seek</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.button} onPress={() => tuneByDelta(1, true)}>
+                  <TouchableOpacity style={styles.button} onPress={() => tuneByDelta(1)}>
                     <Text>Seek ▶</Text>
                   </TouchableOpacity>
                   <TouchableOpacity

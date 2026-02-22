@@ -100,6 +100,8 @@ model PlayEvent {
   playedAt        DateTime @default(now())
   skipped         Boolean  @default(false)
   listenSeconds   Int?
+  startOffsetSec  Int?
+  reason          String?
 
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   station         Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)

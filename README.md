@@ -51,7 +51,10 @@ packages/
   - frequency-style channel labels
   - dial/slider tuning
   - seek step buttons
-  - scan mode (auto-seek every ~2s)
+  - scan mode (auto-seek stations every ~2s, not tracks)
+- Tune-in mid-song offsets on station switch (`/play`):
+  - starts near the middle of tracks with configurable per-station rules
+  - returns `playback.startOffsetSec` metadata for clients
 - Stateful playback per station:
   - persistent recent tracks/artists window
   - avoid repeat track window (default 24h)
@@ -133,6 +136,7 @@ Notes:
 7. Use `Next / Skip` to advance and keep station state moving.
 8. Use Like/Dislike to influence weighting.
 9. Open `Radio` for tuner-style station switching and scan mode.
+   - Scan steps station-to-station every ~2 seconds until stopped.
 10. Open Guide page to preview upcoming tracks without advancing state.
 
 ## API Surface (MVP)
@@ -154,6 +158,7 @@ Notes:
 - `DELETE /api/stations/:id`
 - `POST /api/stations/:id/play`
 - `POST /api/stations/:id/next`
+- `POST /api/tuner/step`
 - `GET /api/stations/:id/peek?n=10`
 - `POST /api/feedback`
 - `GET /api/history?stationId=&limit=`
@@ -197,6 +202,20 @@ For each next-track request:
 8. Return track metadata + Navidrome stream URL.
 
 `peek` runs the same logic in memory and does not persist station state.
+
+Tune-in offset behavior (`POST /api/stations/:id/play`):
+
+- Playback response includes:
+  - `playback.startOffsetSec`
+  - `playback.reason` (`tune_in`, `manual`, or `resume`)
+- Offset is bounded by track duration and station tune-in rule settings.
+- `POST /api/stations/:id/next` does not tune in mid-song by default (offset `0`).
+- Tune-in is controlled per station with rule fields:
+  - `tuneInEnabled` (default `true`)
+  - `tuneInMaxFraction` (default `0.6`)
+  - `tuneInMinHeadSec` (default `8`)
+  - `tuneInMinTailSec` (default `20`)
+  - `tuneInProbability` (default `0.9`)
 
 Performance notes:
 

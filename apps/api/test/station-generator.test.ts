@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCandidateExclusions,
+  computeTuneInOffset,
   computeRecencyBoost,
   scoreCandidate
 } from "../src/services/station-generator";
@@ -103,5 +104,54 @@ describe("candidate exclusions", () => {
     expect(result.relaxedTrackExclusion).toBe(false);
     expect(result.relaxedArtistExclusion).toBe(true);
     expect(result.tracks).toHaveLength(2);
+  });
+});
+
+describe("tune-in offsets", () => {
+  it("returns 0 for short tracks that cannot support a realistic tune-in window", () => {
+    const offset = computeTuneInOffset({
+      durationSec: 30,
+      tuneInEnabled: true,
+      tuneInMaxFraction: 0.6,
+      tuneInMinHeadSec: 8,
+      tuneInMinTailSec: 20,
+      tuneInProbability: 1,
+      probabilityRandom: 0.1,
+      offsetRandom: 0.7
+    });
+
+    expect(offset).toBe(0);
+  });
+
+  it("respects min and max offset bounds", () => {
+    const offset = computeTuneInOffset({
+      durationSec: 240,
+      tuneInEnabled: true,
+      tuneInMaxFraction: 0.6,
+      tuneInMinHeadSec: 8,
+      tuneInMinTailSec: 20,
+      tuneInProbability: 1,
+      probabilityRandom: 0.1,
+      offsetRandom: 0.95
+    });
+
+    const maxOffset = Math.min(Math.floor(240 * 0.6), 240 - 20);
+    expect(offset).toBeGreaterThanOrEqual(8);
+    expect(offset).toBeLessThanOrEqual(maxOffset);
+  });
+
+  it("honors tune-in probability", () => {
+    const offset = computeTuneInOffset({
+      durationSec: 240,
+      tuneInEnabled: true,
+      tuneInMaxFraction: 0.6,
+      tuneInMinHeadSec: 8,
+      tuneInMinTailSec: 20,
+      tuneInProbability: 0,
+      probabilityRandom: 0.9,
+      offsetRandom: 0.4
+    });
+
+    expect(offset).toBe(0);
   });
 });

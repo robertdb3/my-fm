@@ -127,7 +127,9 @@ describe("stations endpoints", () => {
         name: "Rock Channel",
         description: "Rock-heavy station",
         rules: {
-          includeGenres: ["Rock"]
+          includeGenres: ["Rock"],
+          tuneInEnabled: true,
+          tuneInProbability: 1
         },
         isEnabled: true
       }
@@ -199,5 +201,61 @@ describe("stations endpoints", () => {
     expect(payload.nowPlaying).toBeDefined();
     expect(payload.nowPlaying.streamUrl).toContain("/rest/stream.view");
     expect(payload.nextUp.length).toBeGreaterThan(0);
+    expect(payload.playback).toBeDefined();
+    expect(payload.playback.reason).toBe("tune_in");
+    expect(payload.playback.startOffsetSec).toBeGreaterThanOrEqual(8);
+    expect(payload.playback.startOffsetSec).toBeLessThan(payload.nowPlaying.durationSec);
+
+    const createNoTuneInResponse = await app.inject({
+      method: "POST",
+      url: "/api/stations",
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
+      payload: {
+        name: "Rock Channel No Tune",
+        description: "No tune-in offsets",
+        rules: {
+          includeGenres: ["Rock"],
+          tuneInEnabled: true,
+          tuneInProbability: 0
+        },
+        isEnabled: true
+      }
+    });
+
+    expect(createNoTuneInResponse.statusCode).toBe(201);
+
+    const noTuneStationId = createNoTuneInResponse.json().station.id;
+    const noTunePlayResponse = await app.inject({
+      method: "POST",
+      url: `/api/stations/${noTuneStationId}/play`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
+      payload: {}
+    });
+
+    expect(noTunePlayResponse.statusCode).toBe(200);
+    expect(noTunePlayResponse.json().playback.startOffsetSec).toBe(0);
+
+    const stepResponse = await app.inject({
+      method: "POST",
+      url: "/api/tuner/step",
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
+      payload: {
+        direction: "NEXT",
+        fromStationId: stationId,
+        wrap: true,
+        play: true
+      }
+    });
+
+    expect(stepResponse.statusCode).toBe(200);
+    expect(stepResponse.json().station.id).toBe(noTuneStationId);
+    expect(stepResponse.json().nowPlaying).toBeDefined();
+    expect(stepResponse.json().playback).toBeDefined();
   });
 });

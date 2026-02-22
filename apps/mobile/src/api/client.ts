@@ -1,4 +1,11 @@
-import type { Station, Track, TunerStation } from "@music-cable-box/shared";
+import type {
+  NextPlayback,
+  Station,
+  StationPlayback,
+  Track,
+  TunerStation,
+  TunerStepResponse
+} from "@music-cable-box/shared";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -57,9 +64,36 @@ export async function getTunerStations(token: string) {
   return response.stations;
 }
 
-export async function playStation(stationId: string, token: string) {
-  return request<{ nowPlaying: Track; nextUp: Track[] }>(`/api/stations/${stationId}/play`, {
+export async function playStation(
+  stationId: string,
+  token: string,
+  payload?: {
+    seed?: string;
+    reason?: "manual" | "resume";
+  }
+) {
+  return request<{ nowPlaying: Track; nextUp: Track[]; playback: StationPlayback }>(
+    `/api/stations/${stationId}/play`,
+    {
+      method: "POST",
+      token,
+      body: payload ?? {}
+    }
+  );
+}
+
+export async function stepTuner(
+  token: string,
+  payload: {
+    direction: "NEXT" | "PREV";
+    fromStationId?: string;
+    wrap?: boolean;
+    play?: boolean;
+  }
+) {
+  return request<TunerStepResponse>("/api/tuner/step", {
     method: "POST",
+    body: payload,
     token
   });
 }
@@ -71,11 +105,13 @@ export async function nextTrack(
     previousTrackId?: string;
     listenSeconds?: number;
     skipped?: boolean;
+    previousStartOffsetSec?: number;
+    previousReason?: string;
   }
 ) {
-  return request<{ track: Track }>(`/api/stations/${stationId}/next`, {
+  return request<{ track: Track; playback?: NextPlayback }>(`/api/stations/${stationId}/next`, {
     method: "POST",
-    body: payload,
+    body: payload ?? {},
     token
   });
 }

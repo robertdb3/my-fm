@@ -63,7 +63,12 @@ function normalizeLegacyStationRules(input: unknown): unknown {
     durationRange,
     recentlyAddedDays: raw.recentlyAddedDays,
     avoidRepeatHours: raw.avoidRepeatHours,
-    artistSeparation: raw.artistSeparation ?? raw.avoidSameArtistWithinTracks
+    artistSeparation: raw.artistSeparation ?? raw.avoidSameArtistWithinTracks,
+    tuneInEnabled: raw.tuneInEnabled,
+    tuneInMaxFraction: raw.tuneInMaxFraction,
+    tuneInMinHeadSec: raw.tuneInMinHeadSec,
+    tuneInMinTailSec: raw.tuneInMinTailSec,
+    tuneInProbability: raw.tuneInProbability
   };
 }
 
@@ -80,7 +85,12 @@ export const StationRulesSchema = z.preprocess(
     durationRange: DurationRangeSchema.optional(),
     recentlyAddedDays: z.number().int().min(1).max(3650).optional(),
     avoidRepeatHours: z.number().int().min(1).max(168).default(24),
-    artistSeparation: z.number().int().min(1).max(50).default(3)
+    artistSeparation: z.number().int().min(1).max(50).default(3),
+    tuneInEnabled: z.boolean().default(true),
+    tuneInMaxFraction: z.number().min(0.05).max(0.95).default(0.6),
+    tuneInMinHeadSec: z.number().int().min(0).max(600).default(8),
+    tuneInMinTailSec: z.number().int().min(0).max(600).default(20),
+    tuneInProbability: z.number().min(0).max(1).default(0.9)
   })
 );
 
@@ -122,14 +132,26 @@ export const TrackSchema = z.object({
   year: z.number().nullable().optional()
 });
 
+export const StationPlaybackSchema = z.object({
+  startOffsetSec: z.number().int().min(0),
+  reason: z.enum(["tune_in", "resume", "manual"])
+});
+
+export const NextPlaybackSchema = z.object({
+  startOffsetSec: z.number().int().min(0),
+  reason: z.literal("next")
+});
+
 export const StationPlayResponseSchema = z.object({
   nowPlaying: TrackSchema,
   nextUp: z.array(TrackSchema),
-  station: StationSchema
+  station: StationSchema,
+  playback: StationPlaybackSchema
 });
 
 export const StationNextResponseSchema = z.object({
-  track: TrackSchema
+  track: TrackSchema,
+  playback: NextPlaybackSchema.optional()
 });
 
 export const CreateStationSchema = z.object({
@@ -179,6 +201,28 @@ export const TunerStationsResponseSchema = z.object({
   stations: z.array(TunerStationSchema)
 });
 
+export const TunerStepInputSchema = z.object({
+  direction: z.enum(["NEXT", "PREV"]),
+  fromStationId: z.string().cuid().optional(),
+  wrap: z.boolean().default(true),
+  play: z.boolean().default(true)
+});
+
+export const TunerStepResponseSchema = z.object({
+  station: z.object({
+    id: z.string().cuid(),
+    name: z.string(),
+    tunerIndex: z.number().int().min(0),
+    frequencyLabel: z.string(),
+    isSystem: z.boolean(),
+    systemType: StationSystemTypeSchema.nullable(),
+    systemKey: z.string().nullable()
+  }),
+  nowPlaying: TrackSchema.optional(),
+  nextUp: z.array(TrackSchema).optional(),
+  playback: StationPlaybackSchema.optional()
+});
+
 export const NavidromeConnectionInputSchema = z.object({
   baseUrl: z.string().url(),
   username: z.string().min(1),
@@ -218,6 +262,10 @@ export type UpdateStationInput = z.infer<typeof UpdateStationSchema>;
 export type PatchStationInput = z.infer<typeof PatchStationSchema>;
 export type SystemRegenerateInput = z.infer<typeof SystemRegenerateInputSchema>;
 export type TunerStation = z.infer<typeof TunerStationSchema>;
+export type StationPlayback = z.infer<typeof StationPlaybackSchema>;
+export type NextPlayback = z.infer<typeof NextPlaybackSchema>;
+export type TunerStepInput = z.infer<typeof TunerStepInputSchema>;
+export type TunerStepResponse = z.infer<typeof TunerStepResponseSchema>;
 export type FeedbackInput = z.infer<typeof FeedbackInputSchema>;
 export type LoginInput = z.infer<typeof LoginInputSchema>;
 export type NavidromeConnectionInput = z.infer<typeof NavidromeConnectionInputSchema>;

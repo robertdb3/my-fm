@@ -28,6 +28,21 @@ export function createApp() {
     }
   });
 
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
+    const rawBody = typeof body === "string" ? body.trim() : "";
+    if (!rawBody) {
+      done(null, {});
+      return;
+    }
+
+    try {
+      done(null, JSON.parse(rawBody));
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
   app.register(cors, {
     origin: true,
     credentials: true

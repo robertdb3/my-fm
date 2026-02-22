@@ -1,5 +1,10 @@
 import type { Prisma, TrackCache } from "@prisma/client";
-import { StationRulesSchema, type StationRules, type Track } from "@music-cable-box/shared";
+import {
+  StationRulesSchema,
+  type StationPlayback,
+  type StationRules,
+  type Track
+} from "@music-cable-box/shared";
 import { prisma } from "../db";
 import { getClientForUser } from "./library-import-service";
 
@@ -14,6 +19,7 @@ const LIKE_BOOST = 0.5;
 const DISLIKE_PENALTY = 1.0;
 const ARTIST_REPETITION_PENALTY = 0.65;
 const RECENCY_HALF_LIFE_HOURS = 36;
+const TUNE_IN_OFFSET_WINDOW_PADDING_SEC = 10;
 
 interface GenerationState {
   recentTrackIds: string[];
@@ -48,6 +54,20 @@ interface ScoredCandidate {
 export interface GeneratorOptions {
   seed?: string;
   now?: Date;
+}
+
+export type AdvanceReason = "tune_in" | "resume" | "manual" | "next";
+
+export interface AdvanceTrackOptions extends GeneratorOptions {
+  reason?: AdvanceReason;
+}
+
+export interface AdvanceTrackResult {
+  track: Track;
+  playback: {
+    startOffsetSec: number;
+    reason: AdvanceReason;
+  };
 }
 
 export interface ExclusionResult {
@@ -425,6 +445,116 @@ function weightedSampleTopK(scoredCandidates: ScoredCandidate[], topK: number, s
   return weighted[weighted.length - 1]?.track ?? null;
 }
 
+function clampProbability(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0.9;
+  }
+
+  return Math.max(0, Math.min(1, value));
+}
+
+function clampOffsetFraction(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0.6;
+  }
+
+  return Math.max(0.05, Math.min(0.95, value));
+}
+
+function clampWholeNumber(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.floor(value));
+}
+
+export interface TuneInOffsetOptions {
+  durationSec: number | null | undefined;
+  tuneInEnabled: boolean;
+  tuneInMaxFraction: number;
+  tuneInMinHeadSec: number;
+  tuneInMinTailSec: number;
+  tuneInProbability: number;
+  probabilityRandom?: number;
+  offsetRandom?: number;
+}
+
+export function computeTuneInOffset(input: TuneInOffsetOptions): number {
+  const durationSec = clampWholeNumber(input.durationSec ?? 0, 0);
+  if (!input.tuneInEnabled || durationSec <= 0) {
+    return 0;
+  }
+
+  const minHeadSec = clampWholeNumber(input.tuneInMinHeadSec, 8);
+  const minTailSec = clampWholeNumber(input.tuneInMinTailSec, 20);
+  const maxFraction = clampOffsetFraction(input.tuneInMaxFraction);
+  const tuneInProbability = clampProbability(input.tuneInProbability);
+
+  if (durationSec < minHeadSec + minTailSec + TUNE_IN_OFFSET_WINDOW_PADDING_SEC) {
+    return 0;
+  }
+
+  const probabilityRandom = input.probabilityRandom ?? Math.random();
+  if (probabilityRandom > tuneInProbability) {
+    return 0;
+  }
+
+  const maxOffset = Math.min(Math.floor(durationSec * maxFraction), durationSec - minTailSec);
+  const minOffset = Math.min(minHeadSec, maxOffset);
+
+  if (maxOffset <= 0 || maxOffset < minOffset) {
+    return 0;
+  }
+
+  const offsetRandom = input.offsetRandom ?? Math.random();
+  const selected =
+    minOffset + Math.floor(offsetRandom * (maxOffset - minOffset + 1));
+
+  return Math.max(0, Math.min(durationSec - 1, selected));
+}
+
+function tuneInOffsetForTrack(track: TrackCache, rules: StationRules, seed?: string): number {
+  const probabilityRandom = seed
+    ? createSeededRng(`${seed}:tunein-prob:${track.navidromeSongId}`)()
+    : undefined;
+  const offsetRandom = seed
+    ? createSeededRng(`${seed}:tunein-offset:${track.navidromeSongId}`)()
+    : undefined;
+
+  return computeTuneInOffset({
+    durationSec: track.durationSec,
+    tuneInEnabled: rules.tuneInEnabled,
+    tuneInMaxFraction: rules.tuneInMaxFraction,
+    tuneInMinHeadSec: rules.tuneInMinHeadSec,
+    tuneInMinTailSec: rules.tuneInMinTailSec,
+    tuneInProbability: rules.tuneInProbability,
+    probabilityRandom,
+    offsetRandom
+  });
+}
+
+function resolvePlayPlayback(
+  track: TrackCache,
+  rules: StationRules,
+  requestedReason: "manual" | "resume",
+  seed?: string
+): StationPlayback {
+  const startOffsetSec = tuneInOffsetForTrack(track, rules, seed);
+
+  if (startOffsetSec > 0) {
+    return {
+      startOffsetSec,
+      reason: "tune_in"
+    };
+  }
+
+  return {
+    startOffsetSec: 0,
+    reason: requestedReason
+  };
+}
+
 function pushCapped(list: string[], value: string) {
   const next = [...list, value];
   if (next.length > STATE_CAP) {
@@ -633,8 +763,8 @@ function mapTrackToClient(
 export async function advanceNextTrack(
   stationId: string,
   userId: string,
-  options: GeneratorOptions = {}
-): Promise<Track> {
+  options: AdvanceTrackOptions = {}
+): Promise<AdvanceTrackResult> {
   const context = await buildContext(userId, stationId, options);
 
   const selected = pickNextTrack({
@@ -647,6 +777,14 @@ export async function advanceNextTrack(
 
   const playedAt = options.now ?? new Date();
   const nextState = advanceLocalState(context.state, selected, playedAt);
+  const requestedReason = options.reason === "resume" ? "resume" : options.reason === "next" ? "next" : "manual";
+  const playback =
+    requestedReason === "next"
+      ? {
+          startOffsetSec: 0,
+          reason: "next" as const
+        }
+      : resolvePlayPlayback(selected, context.rules, requestedReason, options.seed);
 
   await prisma.stationState.upsert({
     where: { stationId: context.stationId },
@@ -673,11 +811,16 @@ export async function advanceNextTrack(
       navidromeSongId: selected.navidromeSongId,
       playedAt,
       skipped: false,
-      listenSeconds: 0
+      listenSeconds: 0,
+      startOffsetSec: playback.startOffsetSec,
+      reason: playback.reason
     }
   });
 
-  return mapTrackToClient(context.streamClient, selected);
+  return {
+    track: mapTrackToClient(context.streamClient, selected),
+    playback
+  };
 }
 
 export async function peekNextTracks(
