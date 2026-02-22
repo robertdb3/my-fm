@@ -39,6 +39,19 @@ packages/
   - avoid repeat hours
   - artist separation tracks
 - Structured station Rule Builder UI with live match preview
+- Auto-generated system stations:
+  - Artist channels
+  - Genre channels
+  - Decade channels
+- System station controls:
+  - regenerate from library metadata
+  - hide/unhide system stations
+  - enable/disable any station
+- Radio tuner UX on web (`/radio`) and mobile:
+  - frequency-style channel labels
+  - dial/slider tuning
+  - seek step buttons
+  - scan mode (auto-seek every ~2s)
 - Stateful playback per station:
   - persistent recent tracks/artists window
   - avoid repeat track window (default 24h)
@@ -115,10 +128,12 @@ Notes:
 2. Open Settings and test/save Navidrome connection.
 3. Run library import.
 4. Create stations in Stations view.
-5. Tap `Surf` to start playback.
-6. Use `Next / Skip` to advance and keep station state moving.
-7. Use Like/Dislike to influence weighting.
-8. Open Guide page to preview upcoming tracks without advancing state.
+5. (Optional) Click `Generate Stations` to auto-create Artist/Genre/Decade system channels.
+6. Tap `Surf` to start playback.
+7. Use `Next / Skip` to advance and keep station state moving.
+8. Use Like/Dislike to influence weighting.
+9. Open `Radio` for tuner-style station switching and scan mode.
+10. Open Guide page to preview upcoming tracks without advancing state.
 
 ## API Surface (MVP)
 
@@ -126,13 +141,16 @@ Notes:
 - `GET /api/health`
 - `POST /api/navidrome/test-connection`
 - `POST /api/library/import`
-- `GET /api/stations`
+- `GET /api/stations?includeHidden=true|false`
 - `POST /api/stations`
+- `GET /api/stations/tuner`
+- `POST /api/stations/system/regenerate`
 - `GET /api/stations/rule-options?field=genre|artist|album&q=&limit=`
 - `GET /api/stations/preview?stationId=...`
 - `POST /api/stations/preview`
 - `GET /api/stations/:id`
 - `PUT /api/stations/:id`
+- `PATCH /api/stations/:id` (toggle `isEnabled`; toggle `isHidden` for system stations)
 - `DELETE /api/stations/:id`
 - `POST /api/stations/:id/play`
 - `POST /api/stations/:id/next`
@@ -144,8 +162,10 @@ Notes:
 
 - Unit: station scoring logic
 - Unit: exclusion behavior for recent track/artist rules
+- Unit: decade bucketing + thresholds for auto-generation
 - Integration: stations happy path (`create -> list -> play`)
 - Integration: 50 sequential `next` calls with no duplicates in the 24h repeat window
+- Integration: system station regeneration endpoint
 
 Run:
 
@@ -183,6 +203,53 @@ Performance notes:
 - Candidate pool is bounded and never loads full-library rows into memory.
 - Track/play-feedback lookups are scoped to candidate IDs only.
 - Short-lived per-station candidate cache reduces repeated SQL work under rapid skip/surf traffic.
+
+## Auto-Generated Stations
+
+Use `POST /api/stations/system/regenerate` to create/update system channels from `TrackCache`.
+
+- Artist: generates `Artist Radio: {Artist}` for artists meeting threshold.
+- Genre: generates `Genre Radio: {Genre}` for genres meeting threshold.
+- Decade: generates `{Decade} Radio` from track years grouped by decade.
+
+Default thresholds:
+
+- artist: `15`
+- genre: `30`
+- decade: `50`
+
+Example:
+
+```bash
+curl -X POST http://localhost:4000/api/stations/system/regenerate \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"minTracks":{"artist":20,"genre":40,"decade":60}}'
+```
+
+Stale system stations are preserved but auto-hidden (`isHidden=true`) rather than deleted, so history/state is retained.
+
+## Tuner Ordering and Frequencies
+
+`GET /api/stations/tuner` returns stations in stable tuner order with `tunerIndex` and cosmetic `frequencyLabel`.
+
+Ordering:
+
+1. Non-hidden first
+2. System stations before user stations
+3. System type groups in this order: `GENRE`, `DECADE`, `ARTIST`
+4. Within group: `sortKey` ascending
+
+Frequency labels:
+
+- FM-like range `88.1` to `107.9`
+- Base step `0.2`
+- If stations exceed available FM slots, frequencies are compressed across the full range
+
+Hide/disable behavior:
+
+- `isHidden` is supported for system stations (hide from default listings and tuner)
+- `isEnabled` can be toggled for any station
 
 ## Known MVP Limitations
 

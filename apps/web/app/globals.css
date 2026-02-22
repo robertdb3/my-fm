@@ -129,7 +129,7 @@ p.error {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  align-items: center;
+  align-items: flex-start;
   background: #fff;
 }
 
@@ -148,6 +148,35 @@ p.error {
 .meta {
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.station-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #bcd4e3;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+  background: #eff6fb;
+  color: #0b486d;
+}
+
+.station-badge.custom {
+  border-color: #d7d0c5;
+  background: #f8f5ee;
+  color: #6e6458;
+}
+
+.station-badge.muted {
+  border-color: #d4d4d4;
+  background: #f3f3f3;
+  color: #666;
+}
+
+.station-badge.danger {
+  border-color: #e9b7b7;
+  background: #fdf2f2;
+  color: #a14545;
 }
 
 .multi-select-root {
@@ -210,6 +239,32 @@ p.error {
 
 .multi-select-option:hover {
   background: #f2f6fa;
+}
+
+.tuner-display {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem;
+  border: 1px solid #d7d0c5;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fcfaf3 0%, #f2eee5 100%);
+}
+
+.tuner-frequency {
+  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0;
+  color: #0b486d;
+}
+
+.tuner-station {
+  margin: 0;
+  color: #4d545b;
+}
+
+.tuner-slider {
+  margin-top: 0.7rem;
 }
 
 @media (max-width: 980px) {

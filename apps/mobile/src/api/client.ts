@@ -1,4 +1,4 @@
-import type { Station, Track } from "@music-cable-box/shared";
+import type { Station, Track, TunerStation } from "@music-cable-box/shared";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -47,6 +47,13 @@ export async function login(email: string, password: string) {
 
 export async function getStations(token: string) {
   const response = await request<{ stations: Station[] }>("/api/stations", { token });
+  return response.stations;
+}
+
+export async function getTunerStations(token: string) {
+  const response = await request<{ stations: TunerStation[] }>("/api/stations/tuner", {
+    token
+  });
   return response.stations;
 }
 

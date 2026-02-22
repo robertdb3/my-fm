@@ -92,6 +92,8 @@ export function parseStationRules(input: unknown) {
   return StationRulesSchema.parse(input);
 }
 
+export const StationSystemTypeSchema = z.enum(["ARTIST", "GENRE", "DECADE"]);
+
 export const StationSchema = z.object({
   id: z.string().cuid(),
   userId: z.string().cuid(),
@@ -99,6 +101,11 @@ export const StationSchema = z.object({
   description: z.string().nullable(),
   rules: StationRulesSchema,
   isEnabled: z.boolean(),
+  isSystem: z.boolean(),
+  systemType: StationSystemTypeSchema.nullable(),
+  systemKey: z.string().nullable(),
+  sortKey: z.string().nullable(),
+  isHidden: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 });
@@ -134,6 +141,44 @@ export const CreateStationSchema = z.object({
 
 export const UpdateStationSchema = CreateStationSchema.partial();
 
+export const PatchStationSchema = z
+  .object({
+    isEnabled: z.boolean().optional(),
+    isHidden: z.boolean().optional()
+  })
+  .refine((value) => value.isEnabled !== undefined || value.isHidden !== undefined, {
+    message: "Provide at least one field to patch"
+  });
+
+export const SystemRegenerateInputSchema = z.object({
+  types: z.array(StationSystemTypeSchema).min(1).optional(),
+  minTracks: z
+    .object({
+      artist: z.number().int().min(1).max(10_000).optional(),
+      genre: z.number().int().min(1).max(10_000).optional(),
+      decade: z.number().int().min(1).max(10_000).optional()
+    })
+    .optional(),
+  dryRun: z.boolean().default(false)
+});
+
+export const TunerStationSchema = z.object({
+  id: z.string().cuid(),
+  name: z.string(),
+  isSystem: z.boolean(),
+  systemType: StationSystemTypeSchema.nullable(),
+  systemKey: z.string().nullable(),
+  isHidden: z.boolean(),
+  isEnabled: z.boolean(),
+  tunerIndex: z.number().int().min(0),
+  frequencyLabel: z.string(),
+  sortKey: z.string().nullable()
+});
+
+export const TunerStationsResponseSchema = z.object({
+  stations: z.array(TunerStationSchema)
+});
+
 export const NavidromeConnectionInputSchema = z.object({
   baseUrl: z.string().url(),
   username: z.string().min(1),
@@ -165,10 +210,14 @@ export const ApiErrorSchema = z.object({
 });
 
 export type StationRules = z.infer<typeof StationRulesSchema>;
+export type StationSystemType = z.infer<typeof StationSystemTypeSchema>;
 export type Station = z.infer<typeof StationSchema>;
 export type Track = z.infer<typeof TrackSchema>;
 export type CreateStationInput = z.infer<typeof CreateStationSchema>;
 export type UpdateStationInput = z.infer<typeof UpdateStationSchema>;
+export type PatchStationInput = z.infer<typeof PatchStationSchema>;
+export type SystemRegenerateInput = z.infer<typeof SystemRegenerateInputSchema>;
+export type TunerStation = z.infer<typeof TunerStationSchema>;
 export type FeedbackInput = z.infer<typeof FeedbackInputSchema>;
 export type LoginInput = z.infer<typeof LoginInputSchema>;
 export type NavidromeConnectionInput = z.infer<typeof NavidromeConnectionInputSchema>;

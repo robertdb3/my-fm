@@ -11,6 +11,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <strong>Music Cable Box</strong>
           <nav>
             <Link href="/stations">Stations</Link>
+            <Link href="/radio">Radio</Link>
             <Link href="/settings">Settings</Link>
             <Link href="/guide">Guide</Link>
             <LogoutButton />

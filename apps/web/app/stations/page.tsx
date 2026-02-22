@@ -7,7 +7,9 @@ import {
   deleteStationApi,
   getStations,
   nextStationTrack,
+  patchStationApi,
   peekStation,
+  regenerateSystemStations,
   saveFeedback,
   startStation,
   updateStationApi
@@ -31,14 +33,22 @@ export default function StationsPage() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const [pendingSave, setPendingSave] = useState(false);
+  const [pendingRegenerate, setPendingRegenerate] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [systemStatus, setSystemStatus] = useState<string | null>(null);
+  const [showSystemStations, setShowSystemStations] = useState(true);
+  const [showHiddenStations, setShowHiddenStations] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const editingStation = useMemo(
     () => stations.find((station) => station.id === editingStationId) ?? null,
     [editingStationId, stations]
+  );
+  const visibleStations = useMemo(
+    () => stations.filter((station) => (showSystemStations ? true : !station.isSystem)),
+    [showSystemStations, stations]
   );
 
   useEffect(() => {
@@ -65,7 +75,9 @@ export default function StationsPage() {
 
     const run = async () => {
       try {
-        const list = await getStations(token);
+        const list = await getStations(token, {
+          includeHidden: showHiddenStations
+        });
         setStations(list);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load stations");
@@ -75,7 +87,7 @@ export default function StationsPage() {
     run().catch(() => {
       // no-op
     });
-  }, [token]);
+  }, [showHiddenStations, token]);
 
   useEffect(() => {
     if (!nowPlaying || !audioRef.current) {
@@ -91,7 +103,9 @@ export default function StationsPage() {
   }
 
   async function refreshStations() {
-    const list = await getStations(token);
+    const list = await getStations(token, {
+      includeHidden: showHiddenStations
+    });
     setStations(list);
   }
 
@@ -149,6 +163,13 @@ export default function StationsPage() {
   async function playStation(stationId: string) {
     setError(null);
     setStatus("Loading station...");
+
+    const station = stations.find((entry) => entry.id === stationId);
+    if (station && !station.isEnabled) {
+      setStatus(null);
+      setError("Station is disabled. Enable it first.");
+      return;
+    }
 
     try {
       const response = await startStation(stationId, token);
@@ -222,15 +243,72 @@ export default function StationsPage() {
     }
   }
 
+  async function handleRegenerateSystemStations() {
+    setPendingRegenerate(true);
+    setSystemStatus(null);
+    setError(null);
+
+    try {
+      const result = await regenerateSystemStations({}, token);
+      setSystemStatus(
+        `System stations: ${result.created} created, ${result.updated} updated, ${result.disabledOrHidden} hidden.`
+      );
+      await refreshStations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to regenerate system stations");
+    } finally {
+      setPendingRegenerate(false);
+    }
+  }
+
+  async function handleToggleStationEnabled(stationId: string, isEnabled: boolean) {
+    try {
+      await patchStationApi(
+        stationId,
+        {
+          isEnabled
+        },
+        token
+      );
+      await refreshStations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update station");
+    }
+  }
+
+  async function handleToggleSystemStationHidden(stationId: string, isHidden: boolean) {
+    try {
+      await patchStationApi(
+        stationId,
+        {
+          isHidden
+        },
+        token
+      );
+      await refreshStations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update station visibility");
+    }
+  }
+
   return (
     <>
       <div className="grid">
         <StationListPanel
-          stations={stations}
+          stations={visibleStations}
           activeStationId={currentStationId}
           editingStationId={editingStationId}
+          showSystemStations={showSystemStations}
+          showHiddenStations={showHiddenStations}
+          regeneratePending={pendingRegenerate}
+          status={systemStatus}
           onEdit={(stationId) => setEditingStationId(stationId)}
           onSurf={playStation}
+          onToggleShowSystemStations={() => setShowSystemStations((value) => !value)}
+          onToggleShowHiddenStations={() => setShowHiddenStations((value) => !value)}
+          onRegenerateSystemStations={handleRegenerateSystemStations}
+          onToggleStationEnabled={handleToggleStationEnabled}
+          onToggleSystemStationHidden={handleToggleSystemStationHidden}
         />
 
         <StationEditorPanel

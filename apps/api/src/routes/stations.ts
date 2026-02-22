@@ -1,5 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
-import { CreateStationSchema, StationRulesSchema, UpdateStationSchema } from "@music-cable-box/shared";
+import {
+  CreateStationSchema,
+  PatchStationSchema,
+  StationRulesSchema,
+  SystemRegenerateInputSchema,
+  UpdateStationSchema
+} from "@music-cable-box/shared";
 import { prisma } from "../db";
 import { sendError } from "../lib/errors";
 import {
@@ -7,18 +13,30 @@ import {
   deleteStation,
   getStationById,
   listStations,
+  listTunerStations,
+  patchStation,
   updateStation
 } from "../services/station-service";
 import { advanceNextTrack, getStationPreviewCount, peekNextTracks } from "../services/station-generator";
+import { regenerateSystemStations } from "../services/station-auto-generator";
 
 export const stationRoutes: FastifyPluginAsync = async (app) => {
+  const parseBoolean = (value: string | undefined): boolean => value === "true" || value === "1";
+
   app.get(
     "/api/stations",
     {
       preHandler: app.authenticate
     },
     async (request) => {
-      const stations = await listStations(request.appUser.id);
+      const query = request.query as {
+        includeHidden?: string;
+        includeSystem?: string;
+      };
+      const stations = await listStations(request.appUser.id, {
+        includeHidden: parseBoolean(query.includeHidden),
+        includeSystem: query.includeSystem === undefined ? undefined : parseBoolean(query.includeSystem)
+      });
       return { stations };
     }
   );
@@ -37,6 +55,34 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
       const station = await createStation(request.appUser.id, parsed.data);
       return reply.status(201).send({ station });
+    }
+  );
+
+  app.get(
+    "/api/stations/tuner",
+    {
+      preHandler: app.authenticate
+    },
+    async (request) => {
+      const stations = await listTunerStations(request.appUser.id);
+      return { stations };
+    }
+  );
+
+  app.post(
+    "/api/stations/system/regenerate",
+    {
+      preHandler: app.authenticate
+    },
+    async (request, reply) => {
+      const parsed = SystemRegenerateInputSchema.safeParse(request.body ?? {});
+
+      if (!parsed.success) {
+        return sendError(reply, 400, "BAD_REQUEST", "Invalid regenerate payload", parsed.error.flatten());
+      }
+
+      const result = await regenerateSystemStations(request.appUser.id, parsed.data);
+      return result;
     }
   );
 
@@ -215,6 +261,33 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       return { station };
+    }
+  );
+
+  app.patch(
+    "/api/stations/:id",
+    {
+      preHandler: app.authenticate
+    },
+    async (request, reply) => {
+      const parsed = PatchStationSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendError(reply, 400, "BAD_REQUEST", "Invalid station patch", parsed.error.flatten());
+      }
+
+      const { id } = request.params as { id: string };
+
+      try {
+        const station = await patchStation(request.appUser.id, id, parsed.data);
+
+        if (!station) {
+          return sendError(reply, 404, "NOT_FOUND", "Station not found");
+        }
+
+        return { station };
+      } catch (error) {
+        return sendError(reply, 400, "BAD_REQUEST", error instanceof Error ? error.message : "Patch failed");
+      }
     }
   );
 

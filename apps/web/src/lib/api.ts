@@ -3,9 +3,11 @@ import type {
   FeedbackInput,
   NavidromeConnectionInput,
   Station,
+  StationSystemType,
   StationRules,
   Track
 } from "@music-cable-box/shared";
+import type { TunerStation } from "@music-cable-box/shared";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const TOKEN_KEY = "music-cable-box-token";
@@ -85,8 +87,28 @@ export async function login(email: string, password: string) {
   });
 }
 
-export async function getStations(token?: string | null) {
-  const data = await apiRequest<{ stations: Station[] }>("/api/stations", { token });
+export async function getStations(
+  token?: string | null,
+  options?: {
+    includeHidden?: boolean;
+    includeSystem?: boolean;
+  }
+) {
+  const params = new URLSearchParams();
+  if (options?.includeHidden !== undefined) {
+    params.set("includeHidden", String(options.includeHidden));
+  }
+  if (options?.includeSystem !== undefined) {
+    params.set("includeSystem", String(options.includeSystem));
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const data = await apiRequest<{ stations: Station[] }>(`/api/stations${suffix}`, { token });
+  return data.stations;
+}
+
+export async function getTunerStations(token?: string | null) {
+  const data = await apiRequest<{ stations: TunerStation[] }>("/api/stations/tuner", { token });
   return data.stations;
 }
 
@@ -136,6 +158,22 @@ export async function updateStationApi(stationId: string, input: Partial<CreateS
   return data.station;
 }
 
+export async function patchStationApi(
+  stationId: string,
+  input: {
+    isEnabled?: boolean;
+    isHidden?: boolean;
+  },
+  token?: string | null
+) {
+  const data = await apiRequest<{ station: Station }>(`/api/stations/${stationId}`, {
+    method: "PATCH",
+    body: input,
+    token
+  });
+  return data.station;
+}
+
 export async function deleteStationApi(stationId: string, token?: string | null) {
   return apiRequest<{ ok: boolean }>(`/api/stations/${stationId}`, {
     method: "DELETE",
@@ -168,6 +206,31 @@ export async function nextStationTrack(
 
 export async function peekStation(stationId: string, n = 10, token?: string | null) {
   return apiRequest<{ tracks: Track[] }>(`/api/stations/${stationId}/peek?n=${n}`, { token });
+}
+
+export async function regenerateSystemStations(
+  payload: {
+    types?: StationSystemType[];
+    minTracks?: {
+      artist?: number;
+      genre?: number;
+      decade?: number;
+    };
+    dryRun?: boolean;
+  },
+  token?: string | null
+) {
+  return apiRequest<{
+    created: number;
+    updated: number;
+    skipped: number;
+    disabledOrHidden: number;
+    sample: Array<{ type: StationSystemType; key: string; action: string }>;
+  }>("/api/stations/system/regenerate", {
+    method: "POST",
+    body: payload,
+    token
+  });
 }
 
 export async function saveFeedback(payload: FeedbackInput, token?: string | null) {

@@ -62,12 +62,20 @@ model Station {
   description String?
   rulesJson   Json
   isEnabled   Boolean      @default(true)
+  isSystem    Boolean      @default(false)
+  systemType  StationSystemType?
+  systemKey   String?
+  sortKey     String?
+  isHidden    Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   state       StationState?
   playEvents  PlayEvent[]
 
   @@index([userId, isEnabled])
+  @@index([userId, isHidden, sortKey])
+  @@index([userId, isSystem, systemType, sortKey])
+  @@unique([userId, isSystem, systemType, systemKey])
 }
 
 model StationState {
@@ -115,4 +123,10 @@ model TrackFeedback {
 
   @@unique([userId, navidromeSongId])
   @@index([userId, navidromeSongId])
+}
+
+enum StationSystemType {
+  ARTIST
+  GENRE
+  DECADE
 }
