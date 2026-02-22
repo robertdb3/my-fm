@@ -199,7 +199,8 @@ describe("stations endpoints", () => {
     const payload = playResponse.json();
 
     expect(payload.nowPlaying).toBeDefined();
-    expect(payload.nowPlaying.streamUrl).toContain("/rest/stream.view");
+    expect(payload.nowPlaying.streamUrl).toContain("/api/stream/");
+    expect(payload.nowPlaying.streamUrl).toContain("mode=UNMODIFIED");
     expect(payload.nextUp.length).toBeGreaterThan(0);
     expect(payload.playback).toBeDefined();
     expect(payload.playback.reason).toBe("tune_in");

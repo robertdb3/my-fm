@@ -103,6 +103,7 @@ export function parseStationRules(input: unknown) {
 }
 
 export const StationSystemTypeSchema = z.enum(["ARTIST", "GENRE", "DECADE"]);
+export const AudioModeSchema = z.enum(["UNMODIFIED", "FM", "AM"]);
 
 export const StationSchema = z.object({
   id: z.string().cuid(),
@@ -223,6 +224,19 @@ export const TunerStepResponseSchema = z.object({
   playback: StationPlaybackSchema.optional()
 });
 
+export const UserSettingsSchema = z.object({
+  audioMode: AudioModeSchema,
+  updatedAt: z.string().datetime()
+});
+
+export const UpdateUserSettingsSchema = z
+  .object({
+    audioMode: AudioModeSchema.optional()
+  })
+  .refine((value) => value.audioMode !== undefined, {
+    message: "Provide at least one setting field"
+  });
+
 export const NavidromeConnectionInputSchema = z.object({
   baseUrl: z.string().url(),
   username: z.string().min(1),
@@ -255,6 +269,7 @@ export const ApiErrorSchema = z.object({
 
 export type StationRules = z.infer<typeof StationRulesSchema>;
 export type StationSystemType = z.infer<typeof StationSystemTypeSchema>;
+export type AudioMode = z.infer<typeof AudioModeSchema>;
 export type Station = z.infer<typeof StationSchema>;
 export type Track = z.infer<typeof TrackSchema>;
 export type CreateStationInput = z.infer<typeof CreateStationSchema>;
@@ -266,6 +281,8 @@ export type StationPlayback = z.infer<typeof StationPlaybackSchema>;
 export type NextPlayback = z.infer<typeof NextPlaybackSchema>;
 export type TunerStepInput = z.infer<typeof TunerStepInputSchema>;
 export type TunerStepResponse = z.infer<typeof TunerStepResponseSchema>;
+export type UserSettings = z.infer<typeof UserSettingsSchema>;
+export type UpdateUserSettingsInput = z.infer<typeof UpdateUserSettingsSchema>;
 export type FeedbackInput = z.infer<typeof FeedbackInputSchema>;
 export type LoginInput = z.infer<typeof LoginInputSchema>;
 export type NavidromeConnectionInput = z.infer<typeof NavidromeConnectionInputSchema>;

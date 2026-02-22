@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Track, TunerStation } from "@music-cable-box/shared";
+import type { AudioMode, Track, TunerStation } from "@music-cable-box/shared";
 import {
+  buildProxyStreamUrl,
   getTunerStations,
+  getSettings,
   nextStationTrack,
+  patchSettings,
   peekStation,
   saveFeedback,
   startStation,
@@ -43,6 +46,8 @@ export default function RadioPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [audioMode, setAudioMode] = useState<AudioMode>("UNMODIFIED");
+  const [audioModePending, setAudioModePending] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const tuneTimeoutRef = useRef<number | null>(null);
@@ -93,6 +98,25 @@ export default function RadioPage() {
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load tuner stations");
+      }
+    };
+
+    run().catch(() => {
+      // no-op
+    });
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const run = async () => {
+      try {
+        const settings = await getSettings(token);
+        setAudioMode(settings.audioMode);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load audio settings");
       }
     };
 
@@ -415,6 +439,57 @@ export default function RadioPage() {
     }
   }
 
+  async function onChangeAudioMode(nextMode: AudioMode) {
+    if (!token || nextMode === audioMode) {
+      return;
+    }
+
+    const previousMode = audioMode;
+    setAudioMode(nextMode);
+    setAudioModePending(true);
+    setError(null);
+
+    try {
+      await patchSettings(
+        {
+          audioMode: nextMode
+        },
+        token
+      );
+
+      setStatus(
+        nextMode === "UNMODIFIED"
+          ? "Audio mode set to Clean"
+          : nextMode === "FM"
+            ? "Audio mode set to FM"
+            : "Audio mode set to AM"
+      );
+
+      if (nowPlaying) {
+        const requestId = beginSwitchRequest();
+        const updatedTrack: Track = {
+          ...nowPlaying,
+          streamUrl: buildProxyStreamUrl({
+            navidromeSongId: nowPlaying.navidromeSongId,
+            mode: nextMode,
+            offsetSec: 0
+          })
+        };
+        setNowPlaying(updatedTrack);
+        setCurrentPlayback({
+          startOffsetSec: 0,
+          reason: "manual"
+        });
+        await playTrack(updatedTrack, 0, requestId);
+      }
+    } catch (err) {
+      setAudioMode(previousMode);
+      setError(err instanceof Error ? err.message : "Failed to update audio mode");
+    } finally {
+      setAudioModePending(false);
+    }
+  }
+
   if (!token) {
     return <section className="card">Checking auth...</section>;
   }
@@ -431,6 +506,39 @@ export default function RadioPage() {
               <p className="tuner-station">{currentStation.name}</p>
               {isScanning ? <p className="meta">Scanning...</p> : null}
             </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
+              <span className="meta" style={{ alignSelf: "center", marginBottom: 0 }}>
+                Audio:
+              </span>
+              <button
+                type="button"
+                className={audioMode === "UNMODIFIED" ? "primary" : undefined}
+                onClick={() => void onChangeAudioMode("UNMODIFIED")}
+                disabled={audioModePending}
+              >
+                Clean
+              </button>
+              <button
+                type="button"
+                className={audioMode === "FM" ? "primary" : undefined}
+                onClick={() => void onChangeAudioMode("FM")}
+                disabled={audioModePending}
+              >
+                FM
+              </button>
+              <button
+                type="button"
+                className={audioMode === "AM" ? "primary" : undefined}
+                onClick={() => void onChangeAudioMode("AM")}
+                disabled={audioModePending}
+              >
+                AM
+              </button>
+            </div>
+            <p className="meta" style={{ marginBottom: "0.6rem" }}>
+              FM = mild radio coloration. AM = narrow-band vintage radio.
+            </p>
 
             <input
               className="tuner-slider"

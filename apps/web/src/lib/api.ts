@@ -1,4 +1,5 @@
 import type {
+  AudioMode,
   CreateStationInput,
   FeedbackInput,
   NavidromeConnectionInput,
@@ -8,6 +9,7 @@ import type {
   StationSystemType,
   StationRules,
   Track,
+  UserSettings,
   TunerStepResponse
 } from "@music-cable-box/shared";
 import type { TunerStation } from "@music-cable-box/shared";
@@ -33,6 +35,32 @@ export function clearAuthToken() {
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(TOKEN_KEY);
   }
+}
+
+export function buildProxyStreamUrl(params: {
+  navidromeSongId: string;
+  mode: AudioMode;
+  offsetSec?: number;
+  accessToken?: string | null;
+  format?: "mp3" | "aac";
+  bitrateKbps?: number;
+}) {
+  const token = params.accessToken ?? getAuthToken();
+  const url = new URL(`${API_BASE_URL}/api/stream/${encodeURIComponent(params.navidromeSongId)}`);
+  url.searchParams.set("mode", params.mode);
+  if (params.offsetSec !== undefined && params.offsetSec > 0) {
+    url.searchParams.set("offsetSec", String(Math.floor(params.offsetSec)));
+  }
+  if (params.format) {
+    url.searchParams.set("format", params.format);
+  }
+  if (params.bitrateKbps !== undefined) {
+    url.searchParams.set("bitrateKbps", String(Math.floor(params.bitrateKbps)));
+  }
+  if (token) {
+    url.searchParams.set("accessToken", token);
+  }
+  return url.toString();
 }
 
 class ApiRequestError extends Error {
@@ -263,6 +291,25 @@ export async function regenerateSystemStations(
     body: payload,
     token
   });
+}
+
+export async function getSettings(token?: string | null) {
+  const data = await apiRequest<{ settings: UserSettings }>("/api/settings", { token });
+  return data.settings;
+}
+
+export async function patchSettings(
+  input: {
+    audioMode?: AudioMode;
+  },
+  token?: string | null
+) {
+  const data = await apiRequest<{ settings: UserSettings }>("/api/settings", {
+    method: "PATCH",
+    body: input,
+    token
+  });
+  return data.settings;
 }
 
 export async function saveFeedback(payload: FeedbackInput, token?: string | null) {

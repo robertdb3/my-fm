@@ -1,13 +1,38 @@
 import type {
+  AudioMode,
   NextPlayback,
   Station,
   StationPlayback,
   Track,
   TunerStation,
-  TunerStepResponse
+  TunerStepResponse,
+  UserSettings
 } from "@music-cable-box/shared";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
+
+export function buildProxyStreamUrl(params: {
+  navidromeSongId: string;
+  mode: AudioMode;
+  token: string;
+  offsetSec?: number;
+  format?: "mp3" | "aac";
+  bitrateKbps?: number;
+}) {
+  const url = new URL(`${API_BASE_URL}/api/stream/${encodeURIComponent(params.navidromeSongId)}`);
+  url.searchParams.set("mode", params.mode);
+  url.searchParams.set("accessToken", params.token);
+  if (params.offsetSec !== undefined && params.offsetSec > 0) {
+    url.searchParams.set("offsetSec", String(Math.floor(params.offsetSec)));
+  }
+  if (params.format) {
+    url.searchParams.set("format", params.format);
+  }
+  if (params.bitrateKbps !== undefined) {
+    url.searchParams.set("bitrateKbps", String(Math.floor(params.bitrateKbps)));
+  }
+  return url.toString();
+}
 
 async function request<T>(
   path: string,
@@ -159,4 +184,23 @@ export async function importLibrary(token: string, payload: { fullResync: boolea
       body: payload
     }
   );
+}
+
+export async function getSettings(token: string) {
+  const response = await request<{ settings: UserSettings }>("/api/settings", { token });
+  return response.settings;
+}
+
+export async function patchSettings(
+  token: string,
+  payload: {
+    audioMode?: AudioMode;
+  }
+) {
+  const response = await request<{ settings: UserSettings }>("/api/settings", {
+    method: "PATCH",
+    token,
+    body: payload
+  });
+  return response.settings;
 }

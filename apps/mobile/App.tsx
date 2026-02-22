@@ -13,13 +13,16 @@ import {
 } from "react-native";
 import type { LayoutChangeEvent } from "react-native";
 import { Audio } from "expo-av";
-import type { Station, Track, TunerStation } from "@music-cable-box/shared";
+import type { AudioMode, Station, Track, TunerStation } from "@music-cable-box/shared";
 import {
+  buildProxyStreamUrl,
   getStations,
+  getSettings,
   getTunerStations,
   importLibrary,
   login,
   nextTrack,
+  patchSettings,
   peekStation,
   playStation,
   stepTuner,
@@ -125,6 +128,8 @@ export default function App() {
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [nextUp, setNextUp] = useState<Track[]>([]);
   const [currentPlayback, setCurrentPlayback] = useState<PlaybackMeta | null>(null);
+  const [audioMode, setAudioMode] = useState<AudioMode>("UNMODIFIED");
+  const [audioModePending, setAudioModePending] = useState(false);
 
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +185,20 @@ export default function App() {
       .finally(() => {
         setLoadingStations(false);
         setLoadingTuner(false);
+      });
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    getSettings(token)
+      .then((settings) => {
+        setAudioMode(settings.audioMode);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load audio settings");
       });
   }, [token]);
 
@@ -566,6 +585,54 @@ export default function App() {
     }
   }
 
+  async function onChangeAudioMode(nextMode: AudioMode) {
+    if (!token || nextMode === audioMode) {
+      return;
+    }
+
+    const previousMode = audioMode;
+    setAudioMode(nextMode);
+    setAudioModePending(true);
+    setError(null);
+
+    try {
+      await patchSettings(token, {
+        audioMode: nextMode
+      });
+      setStatus(
+        nextMode === "UNMODIFIED"
+          ? "Audio mode: Clean"
+          : nextMode === "FM"
+            ? "Audio mode: FM"
+            : "Audio mode: AM"
+      );
+
+      if (nowPlaying) {
+        const requestId = beginSwitchRequest();
+        const updatedTrack: Track = {
+          ...nowPlaying,
+          streamUrl: buildProxyStreamUrl({
+            navidromeSongId: nowPlaying.navidromeSongId,
+            mode: nextMode,
+            token,
+            offsetSec: 0
+          })
+        };
+        setNowPlaying(updatedTrack);
+        setCurrentPlayback({
+          startOffsetSec: 0,
+          reason: "manual"
+        });
+        await playTrack(updatedTrack, 0, requestId);
+      }
+    } catch (err) {
+      setAudioMode(previousMode);
+      setError(err instanceof Error ? err.message : "Failed to update audio mode");
+    } finally {
+      setAudioModePending(false);
+    }
+  }
+
   async function onSaveNavidrome() {
     if (!token) {
       return;
@@ -684,6 +751,31 @@ export default function App() {
                 <Text style={styles.tunerFrequency}>{currentTunerStation.frequencyLabel}</Text>
                 <Text style={styles.meta}>{currentTunerStation.name}</Text>
                 {scanEnabled ? <Text style={styles.meta}>Scanning...</Text> : null}
+                <View style={styles.row}>
+                  <Text style={[styles.meta, { marginBottom: 0, alignSelf: "center" }]}>Audio:</Text>
+                  <TouchableOpacity
+                    style={[styles.button, audioMode === "UNMODIFIED" ? styles.primary : undefined]}
+                    onPress={() => void onChangeAudioMode("UNMODIFIED")}
+                    disabled={audioModePending}
+                  >
+                    <Text style={audioMode === "UNMODIFIED" ? styles.primaryLabel : undefined}>Clean</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.button, audioMode === "FM" ? styles.primary : undefined]}
+                    onPress={() => void onChangeAudioMode("FM")}
+                    disabled={audioModePending}
+                  >
+                    <Text style={audioMode === "FM" ? styles.primaryLabel : undefined}>FM</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.button, audioMode === "AM" ? styles.primary : undefined]}
+                    onPress={() => void onChangeAudioMode("AM")}
+                    disabled={audioModePending}
+                  >
+                    <Text style={audioMode === "AM" ? styles.primaryLabel : undefined}>AM</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.meta}>FM = mild radio coloration. AM = narrow-band vintage radio.</Text>
                 <TunerSlider
                   value={currentTunerIndex}
                   min={0}
@@ -890,7 +982,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 8
+    marginTop: 8,
+    flexWrap: "wrap"
   },
   trackTitle: {
     fontSize: 20,

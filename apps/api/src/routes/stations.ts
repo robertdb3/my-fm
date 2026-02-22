@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
+  type AudioMode,
   CreateStationSchema,
   PatchStationSchema,
   StationRulesSchema,
@@ -20,9 +21,65 @@ import {
 } from "../services/station-service";
 import { advanceNextTrack, getStationPreviewCount, peekNextTracks } from "../services/station-generator";
 import { regenerateSystemStations } from "../services/station-auto-generator";
+import { buildStreamProxyUrl } from "../services/stream-proxy";
+import { getUserAudioMode } from "../services/user-settings-service";
 
 export const stationRoutes: FastifyPluginAsync = async (app) => {
   const parseBoolean = (value: string | undefined): boolean => value === "true" || value === "1";
+  const getRequestOrigin = (request: { headers: Record<string, unknown>; protocol: string }) => {
+    const forwardedProto = request.headers["x-forwarded-proto"];
+    const protocol =
+      typeof forwardedProto === "string" && forwardedProto.trim().length > 0
+        ? forwardedProto.split(",")[0]?.trim() ?? request.protocol
+        : request.protocol;
+    const host = typeof request.headers.host === "string" ? request.headers.host : "localhost:4000";
+
+    return `${protocol}://${host}`;
+  };
+  const getAccessTokenFromRequest = (request: { headers: Record<string, unknown> }) => {
+    const header = request.headers.authorization;
+    if (typeof header !== "string") {
+      return null;
+    }
+
+    if (!header.startsWith("Bearer ")) {
+      return null;
+    }
+
+    const token = header.slice(7).trim();
+    return token.length > 0 ? token : null;
+  };
+  const toProxyTrack = (params: {
+    track: {
+      navidromeSongId: string;
+      title: string;
+      artist: string;
+      album: string | null;
+      durationSec: number | null;
+      artworkUrl: string | null;
+      streamUrl: string;
+      genre?: string | null;
+      year?: number | null;
+    };
+    mode: AudioMode;
+    request: {
+      headers: Record<string, unknown>;
+      protocol: string;
+    };
+    accessToken: string;
+    offsetSec?: number;
+  }) => {
+    return {
+      ...params.track,
+      streamUrl: buildStreamProxyUrl({
+        origin: getRequestOrigin(params.request),
+        navidromeSongId: params.track.navidromeSongId,
+        mode: params.mode,
+        accessToken: params.accessToken,
+        offsetSec: params.offsetSec
+      })
+    };
+  };
   const stepIndex = (
     currentIndex: number,
     direction: "NEXT" | "PREV",
@@ -137,15 +194,35 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
+        const accessToken = getAccessTokenFromRequest(request);
+        if (!accessToken) {
+          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
+        }
+        const mode = await getUserAudioMode(request.appUser.id);
         const result = await advanceNextTrack(station.id, request.appUser.id, {
           reason: "manual"
         });
         const nextUp = await peekNextTracks(station.id, request.appUser.id, 10);
+        const nowPlaying = toProxyTrack({
+          track: result.track,
+          mode,
+          request,
+          accessToken,
+          offsetSec: result.playback.startOffsetSec
+        });
+        const proxiedNextUp = nextUp.map((track) =>
+          toProxyTrack({
+            track,
+            mode,
+            request,
+            accessToken
+          })
+        );
 
         return {
           station: targetStation,
-          nowPlaying: result.track,
-          nextUp,
+          nowPlaying,
+          nextUp: proxiedNextUp,
           playback: result.playback
         };
       } catch (error) {
@@ -410,6 +487,11 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
+        const accessToken = getAccessTokenFromRequest(request);
+        if (!accessToken) {
+          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
+        }
+        const mode = await getUserAudioMode(request.appUser.id);
         const nowPlaying = await advanceNextTrack(station.id, request.appUser.id, {
           seed: body.seed,
           reason: body.reason ?? "manual"
@@ -417,10 +499,25 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
         const nextUp = await peekNextTracks(station.id, request.appUser.id, 10, {
           seed: body.seed
         });
+        const proxiedNowPlaying = toProxyTrack({
+          track: nowPlaying.track,
+          mode,
+          request,
+          accessToken,
+          offsetSec: nowPlaying.playback.startOffsetSec
+        });
+        const proxiedNextUp = nextUp.map((track) =>
+          toProxyTrack({
+            track,
+            mode,
+            request,
+            accessToken
+          })
+        );
 
         return {
-          nowPlaying: nowPlaying.track,
-          nextUp,
+          nowPlaying: proxiedNowPlaying,
+          nextUp: proxiedNextUp,
           station,
           playback: nowPlaying.playback
         };
@@ -472,12 +569,24 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
+        const accessToken = getAccessTokenFromRequest(request);
+        if (!accessToken) {
+          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
+        }
+        const mode = await getUserAudioMode(request.appUser.id);
         const track = await advanceNextTrack(station.id, request.appUser.id, {
           seed: payload.seed,
           reason: "next"
         });
-        return {
+        const proxiedTrack = toProxyTrack({
           track: track.track,
+          mode,
+          request,
+          accessToken,
+          offsetSec: track.playback.startOffsetSec
+        });
+        return {
+          track: proxiedTrack,
           playback: track.playback.reason === "next" ? track.playback : undefined
         };
       } catch (error) {
@@ -506,11 +615,24 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       const n = Number.isFinite(parsedN) ? Math.min(50, Math.max(1, parsedN)) : 10;
 
       try {
+        const accessToken = getAccessTokenFromRequest(request);
+        if (!accessToken) {
+          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
+        }
+        const mode = await getUserAudioMode(request.appUser.id);
         const tracks = await peekNextTracks(station.id, request.appUser.id, n, {
           seed: query.seed
         });
+        const proxiedTracks = tracks.map((track) =>
+          toProxyTrack({
+            track,
+            mode,
+            request,
+            accessToken
+          })
+        );
         return {
-          tracks
+          tracks: proxiedTracks
         };
       } catch (error) {
         return sendError(reply, 400, "BAD_REQUEST", "Failed to peek station queue", {

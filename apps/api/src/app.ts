@@ -9,7 +9,9 @@ import { healthRoutes } from "./routes/health";
 import { historyRoutes } from "./routes/history";
 import { libraryRoutes } from "./routes/library";
 import { navidromeRoutes } from "./routes/navidrome";
+import { settingsRoutes } from "./routes/settings";
 import { stationRoutes } from "./routes/stations";
+import { streamRoutes } from "./routes/stream";
 import "./types";
 
 export function createApp() {
@@ -52,8 +54,10 @@ export function createApp() {
   app.register(healthRoutes);
   app.register(authRoutes);
   app.register(navidromeRoutes);
+  app.register(settingsRoutes);
   app.register(libraryRoutes);
   app.register(stationRoutes);
+  app.register(streamRoutes);
   app.register(feedbackRoutes);
   app.register(historyRoutes);
 

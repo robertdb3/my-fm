@@ -12,6 +12,7 @@ model User {
   email            String?            @unique
   createdAt        DateTime           @default(now())
   navidromeAccount NavidromeAccount?
+  settings         UserSettings?
   stations         Station[]
   stationStates    StationState[]
   playEvents       PlayEvent[]
@@ -127,8 +128,21 @@ model TrackFeedback {
   @@index([userId, navidromeSongId])
 }
 
+model UserSettings {
+  userId     String    @id
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audioMode  AudioMode @default(UNMODIFIED)
+  updatedAt  DateTime  @updatedAt
+}
+
 enum StationSystemType {
   ARTIST
   GENRE
   DECADE
+}
+
+enum AudioMode {
+  UNMODIFIED
+  FM
+  AM
 }

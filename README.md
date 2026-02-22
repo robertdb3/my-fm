@@ -55,6 +55,10 @@ packages/
 - Tune-in mid-song offsets on station switch (`/play`):
   - starts near the middle of tracks with configurable per-station rules
   - returns `playback.startOffsetSec` metadata for clients
+- Audio mode toggle on Radio screen (web + mobile):
+  - `Clean` (unmodified)
+  - `FM` (mild radio coloration)
+  - `AM` (narrow-band vintage radio)
 - Stateful playback per station:
   - persistent recent tracks/artists window
   - avoid repeat track window (default 24h)
@@ -79,6 +83,7 @@ packages/
 - Node.js 20+
 - `pnpm` (via corepack)
 - Reachable Navidrome instance
+- FFmpeg installed and available in PATH (or set `FFMPEG_PATH`)
 
 ## Environment Setup
 
@@ -96,6 +101,7 @@ cp apps/mobile/.env.example apps/mobile/.env
 - `JWT_SECRET`
 - `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD`
 - optional Subsonic client metadata
+- optional `FFMPEG_PATH` if ffmpeg binary is not available as `ffmpeg`
 
 3. Edit `apps/web/.env` and `apps/mobile/.env` API URL values if needed.
 
@@ -144,6 +150,8 @@ Notes:
 - `POST /api/auth/login`
 - `GET /api/health`
 - `POST /api/navidrome/test-connection`
+- `GET /api/settings`
+- `PATCH /api/settings`
 - `POST /api/library/import`
 - `GET /api/stations?includeHidden=true|false`
 - `POST /api/stations`
@@ -159,6 +167,7 @@ Notes:
 - `POST /api/stations/:id/play`
 - `POST /api/stations/:id/next`
 - `POST /api/tuner/step`
+- `GET /api/stream/:navidromeSongId?mode=&offsetSec=&format=&bitrateKbps=`
 - `GET /api/stations/:id/peek?n=10`
 - `POST /api/feedback`
 - `GET /api/history?stationId=&limit=`
@@ -199,7 +208,7 @@ For each next-track request:
    - `artistRepetitionPenalty` for recent artists
 6. Sort by score, take top-K (`200`), then weighted-random sample.
 7. Persist station state and play event (`advance` path).
-8. Return track metadata + Navidrome stream URL.
+8. Return track metadata + proxied stream URL (`/api/stream/:songId`) with mode/offset context.
 
 `peek` runs the same logic in memory and does not persist station state.
 
@@ -216,6 +225,23 @@ Tune-in offset behavior (`POST /api/stations/:id/play`):
   - `tuneInMinHeadSec` (default `8`)
   - `tuneInMinTailSec` (default `20`)
   - `tuneInProbability` (default `0.9`)
+
+Audio mode behavior (server-side transcoding):
+
+- Playback URLs from station endpoints point to `/api/stream/:songId`.
+- The backend transcodes on the fly with FFmpeg so web and mobile hear the same mode.
+- Modes:
+  - `UNMODIFIED`: clean transcode
+  - `FM`: gentle band-limit + compression + subtle noise
+  - `AM`: mono narrow band + stronger compression + higher noise floor
+- Mode is stored per user in `UserSettings.audioMode`.
+- Radio screens load this setting at startup and let you switch `Clean / FM / AM`.
+- When mode is changed during playback, clients restart the current track from `0:00` with the new mode (no range-seek in MVP).
+
+CPU note:
+
+- FM/AM proxy streams use live FFmpeg processing and are more CPU-intensive than direct Navidrome passthrough.
+- Use lower `bitrateKbps` in stream query or keep fewer concurrent listeners if needed.
 
 Performance notes:
 
