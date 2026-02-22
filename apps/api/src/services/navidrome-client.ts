@@ -181,11 +181,16 @@ export class NavidromeClient {
     return response.song;
   }
 
-  buildStreamUrl(songId: string): string {
+  buildStreamUrl(songId: string, options?: { timeOffsetSec?: number }): string {
     const url = new URL(`${this.credentials.baseUrl}/rest/stream.view`);
+    const normalizedOffset =
+      options?.timeOffsetSec !== undefined && Number.isFinite(options.timeOffsetSec)
+        ? Math.max(0, Math.floor(options.timeOffsetSec))
+        : 0;
     const params = {
       ...this.buildAuthParams(),
-      id: songId
+      id: songId,
+      ...(normalizedOffset > 0 ? { timeOffset: normalizedOffset } : {})
     };
 
     for (const [key, value] of Object.entries(params)) {

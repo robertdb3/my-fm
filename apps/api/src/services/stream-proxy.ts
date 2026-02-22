@@ -63,7 +63,6 @@ export function buildStreamProxyUrl(options: BuildStreamProxyUrlOptions): string
 export interface FfmpegPlanInput {
   sourceUrl: string;
   mode: AudioMode;
-  offsetSec?: number;
   format?: string;
   bitrateKbps?: number;
 }
@@ -89,13 +88,8 @@ export function buildFfmpegPlan(input: FfmpegPlanInput): FfmpegPlan {
   const mode = parseAudioMode(input.mode);
   const format = normalizeFormat(input.format);
   const bitrateKbps = normalizeBitrateKbps(mode, input.bitrateKbps);
-  const offsetSec = normalizeOffsetSec(input.offsetSec);
 
   const args: string[] = ["-hide_banner", "-loglevel", "error", "-nostdin"];
-  if (offsetSec > 0) {
-    args.push("-ss", String(offsetSec));
-  }
-
   args.push("-i", input.sourceUrl, "-vn");
 
   if (mode === "FM") {

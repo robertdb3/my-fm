@@ -67,7 +67,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       protocol: string;
     };
     accessToken: string;
-    offsetSec?: number;
   }) => {
     return {
       ...params.track,
@@ -75,8 +74,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
         origin: getRequestOrigin(params.request),
         navidromeSongId: params.track.navidromeSongId,
         mode: params.mode,
-        accessToken: params.accessToken,
-        offsetSec: params.offsetSec
+        accessToken: params.accessToken
       })
     };
   };
@@ -207,8 +205,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           track: result.track,
           mode,
           request,
-          accessToken,
-          offsetSec: result.playback.startOffsetSec
+          accessToken
         });
         const proxiedNextUp = nextUp.map((track) =>
           toProxyTrack({
@@ -503,8 +500,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           track: nowPlaying.track,
           mode,
           request,
-          accessToken,
-          offsetSec: nowPlaying.playback.startOffsetSec
+          accessToken
         });
         const proxiedNextUp = nextUp.map((track) =>
           toProxyTrack({
@@ -582,8 +578,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           track: track.track,
           mode,
           request,
-          accessToken,
-          offsetSec: track.playback.startOffsetSec
+          accessToken
         });
         return {
           track: proxiedTrack,

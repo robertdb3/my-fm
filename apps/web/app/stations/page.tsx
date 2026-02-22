@@ -29,6 +29,7 @@ export default function StationsPage() {
   const [editingStationId, setEditingStationId] = useState<string | null>(null);
   const [currentStationId, setCurrentStationId] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
+  const [currentStartOffsetSec, setCurrentStartOffsetSec] = useState(0);
   const [nextUp, setNextUp] = useState<Track[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -94,9 +95,92 @@ export default function StationsPage() {
       return;
     }
 
-    audioRef.current.src = nowPlaying.streamUrl;
-    audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-  }, [nowPlaying]);
+    const audio = audioRef.current;
+    let cancelled = false;
+
+    const clampStartOffset = (track: Track, startOffsetSec: number) => {
+      const durationSec = track.durationSec ?? 0;
+      if (!Number.isFinite(startOffsetSec) || startOffsetSec <= 0) {
+        return 0;
+      }
+
+      if (!Number.isFinite(durationSec) || durationSec <= 1) {
+        return startOffsetSec;
+      }
+
+      return Math.max(0, Math.min(startOffsetSec, Math.max(0, durationSec - 1)));
+    };
+
+    const waitForMetadata = async () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const onLoaded = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error("Failed to load metadata"));
+        };
+        const cleanup = () => {
+          audio.removeEventListener("loadedmetadata", onLoaded);
+          audio.removeEventListener("canplay", onLoaded);
+          audio.removeEventListener("error", onError);
+        };
+
+        audio.addEventListener("loadedmetadata", onLoaded);
+        audio.addEventListener("canplay", onLoaded);
+        audio.addEventListener("error", onError);
+      });
+    };
+
+    const run = async () => {
+      const clampedStartOffset = clampStartOffset(nowPlaying, currentStartOffsetSec);
+      audio.pause();
+      audio.src = nowPlaying.streamUrl;
+      audio.load();
+
+      try {
+        await waitForMetadata();
+      } catch {
+        if (cancelled) {
+          return;
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      if (clampedStartOffset > 0) {
+        try {
+          audio.currentTime = clampedStartOffset;
+        } catch {
+          // ignore seek failures before the first playable frame
+        }
+      }
+
+      try {
+        await audio.play();
+        if (!cancelled) {
+          setIsPlaying(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsPlaying(false);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStartOffsetSec, nowPlaying]);
 
   if (!token) {
     return <section className="card">Checking auth...</section>;
@@ -139,6 +223,7 @@ export default function StationsPage() {
     if (currentStationId === stationId) {
       setCurrentStationId(null);
       setNowPlaying(null);
+      setCurrentStartOffsetSec(0);
       setNextUp([]);
       setIsPlaying(false);
     }
@@ -174,6 +259,7 @@ export default function StationsPage() {
     try {
       const response = await startStation(stationId, token);
       setCurrentStationId(stationId);
+      setCurrentStartOffsetSec(response.playback.startOffsetSec);
       setNowPlaying(response.nowPlaying);
       setNextUp(response.nextUp);
       setStatus(`Now playing from ${response.station.name}`);
@@ -200,6 +286,7 @@ export default function StationsPage() {
         peekStation(currentStationId, 10, token)
       ]);
 
+      setCurrentStartOffsetSec(nextResponse.playback?.startOffsetSec ?? 0);
       setNowPlaying(nextResponse.track);
       setNextUp(peekResponse.tracks);
     } catch (err) {

@@ -28,10 +28,10 @@ function clampStartOffset(track: Track, startOffsetSec: number): number {
   }
 
   if (!Number.isFinite(durationSec) || durationSec <= 1) {
-    return Math.floor(startOffsetSec);
+    return startOffsetSec;
   }
 
-  return Math.max(0, Math.min(Math.floor(startOffsetSec), Math.floor(durationSec) - 1));
+  return Math.max(0, Math.min(startOffsetSec, Math.max(0, durationSec - 1)));
 }
 
 export default function RadioPage() {
@@ -168,11 +168,17 @@ export default function RadioPage() {
     });
   }
 
-  async function playTrack(track: Track, startOffsetSec: number, requestId: number) {
+  async function playTrack(
+    track: Track,
+    startOffsetSec: number,
+    requestId: number,
+    options?: { shouldAutoPlay?: boolean }
+  ) {
     const audio = audioRef.current;
     if (!audio) {
       return;
     }
+    const shouldAutoPlay = options?.shouldAutoPlay ?? true;
 
     audio.pause();
     audio.src = track.streamUrl;
@@ -197,6 +203,11 @@ export default function RadioPage() {
       } catch {
         // ignore seek failures before the first playable frame
       }
+    }
+
+    if (!shouldAutoPlay) {
+      setIsPlaying(false);
+      return;
     }
 
     try {
@@ -466,21 +477,30 @@ export default function RadioPage() {
       );
 
       if (nowPlaying) {
+        const audio = audioRef.current;
+        const resumeOffsetSec = clampStartOffset(
+          nowPlaying,
+          audio && Number.isFinite(audio.currentTime) && audio.currentTime > 0
+            ? audio.currentTime
+            : 0
+        );
+        const shouldResumePlayback = audio ? !audio.paused : isPlaying;
         const requestId = beginSwitchRequest();
         const updatedTrack: Track = {
           ...nowPlaying,
           streamUrl: buildProxyStreamUrl({
             navidromeSongId: nowPlaying.navidromeSongId,
-            mode: nextMode,
-            offsetSec: 0
+            mode: nextMode
           })
         };
         setNowPlaying(updatedTrack);
         setCurrentPlayback({
-          startOffsetSec: 0,
+          startOffsetSec: resumeOffsetSec,
           reason: "manual"
         });
-        await playTrack(updatedTrack, 0, requestId);
+        await playTrack(updatedTrack, resumeOffsetSec, requestId, {
+          shouldAutoPlay: shouldResumePlayback
+        });
       }
     } catch (err) {
       setAudioMode(previousMode);

@@ -20,12 +20,10 @@ describe("stream proxy ffmpeg profiles", () => {
       sourceUrl: "https://navidrome.test/rest/stream.view?id=song-2",
       mode: "FM",
       format: "mp3",
-      bitrateKbps: 128,
-      offsetSec: 42
+      bitrateKbps: 128
     });
 
     const args = plan.args.join(" ");
-    expect(args).toContain("-ss 42");
     expect(args).toContain("highpass=f=80");
     expect(args).toContain("lowpass=f=15000");
     expect(args).toContain("acompressor=");

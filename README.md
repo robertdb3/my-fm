@@ -208,7 +208,7 @@ For each next-track request:
    - `artistRepetitionPenalty` for recent artists
 6. Sort by score, take top-K (`200`), then weighted-random sample.
 7. Persist station state and play event (`advance` path).
-8. Return track metadata + proxied stream URL (`/api/stream/:songId`) with mode/offset context.
+8. Return track metadata + proxied stream URL (`/api/stream/:songId`) with mode context and playback metadata (`startOffsetSec`) for client-side tune-in.
 
 `peek` runs the same logic in memory and does not persist station state.
 
@@ -236,7 +236,7 @@ Audio mode behavior (server-side transcoding):
   - `AM`: mono narrow band + stronger compression + higher noise floor
 - Mode is stored per user in `UserSettings.audioMode`.
 - Radio screens load this setting at startup and let you switch `Clean / FM / AM`.
-- When mode is changed during playback, clients restart the current track from `0:00` with the new mode (no range-seek in MVP).
+- When mode is changed during playback, clients rebuild the stream in the new mode and resume from the current timestamp (best-effort, approximate seek).
 
 CPU note:
 

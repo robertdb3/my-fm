@@ -45,6 +45,19 @@ interface TunerSliderProps {
   onComplete(value: number): void;
 }
 
+function clampStartOffset(track: Track, startOffsetSec: number): number {
+  const durationSec = track.durationSec ?? 0;
+  if (!Number.isFinite(startOffsetSec) || startOffsetSec <= 0) {
+    return 0;
+  }
+
+  if (!Number.isFinite(durationSec) || durationSec <= 1) {
+    return startOffsetSec;
+  }
+
+  return Math.max(0, Math.min(startOffsetSec, Math.max(0, durationSec - 1)));
+}
+
 function TunerSlider({ value, min, max, onChange, onComplete }: TunerSliderProps) {
   const safeMax = Math.max(min, max);
   const range = Math.max(1, safeMax - min);
@@ -276,14 +289,20 @@ export default function App() {
     return requestId === switchRequestIdRef.current;
   }
 
-  async function playTrack(track: Track, startOffsetSec: number, requestId: number) {
+  async function playTrack(
+    track: Track,
+    startOffsetSec: number,
+    requestId: number,
+    options?: { shouldAutoPlay?: boolean }
+  ) {
     if (soundRef.current) {
       await soundRef.current.unloadAsync().catch(() => {
         // no-op
       });
     }
+    const shouldAutoPlay = options?.shouldAutoPlay ?? true;
 
-    const initialPositionMillis = Math.max(0, Math.floor(startOffsetSec * 1000));
+    const initialPositionMillis = Math.max(0, Math.round(startOffsetSec * 1000));
 
     const { sound: createdSound } = await Audio.Sound.createAsync(
       {
@@ -302,10 +321,14 @@ export default function App() {
       return;
     }
 
-    let started = true;
-    await createdSound.playAsync().catch(() => {
-      started = false;
-    });
+    let started = false;
+    if (shouldAutoPlay) {
+      await createdSound.playAsync().then(() => {
+        started = true;
+      }).catch(() => {
+        started = false;
+      });
+    }
 
     if (!isLatestSwitchRequest(requestId)) {
       await createdSound.unloadAsync().catch(() => {
@@ -608,22 +631,34 @@ export default function App() {
       );
 
       if (nowPlaying) {
+        let resumeOffsetSec = 0;
+        let shouldResumePlayback = isPlaying;
+        if (soundRef.current) {
+          const playbackStatus = await soundRef.current.getStatusAsync();
+          if (playbackStatus.isLoaded) {
+            resumeOffsetSec = Math.max(0, playbackStatus.positionMillis / 1000);
+            shouldResumePlayback = playbackStatus.isPlaying;
+          }
+        }
+        const clampedResumeOffsetSec = clampStartOffset(nowPlaying, resumeOffsetSec);
+
         const requestId = beginSwitchRequest();
         const updatedTrack: Track = {
           ...nowPlaying,
           streamUrl: buildProxyStreamUrl({
             navidromeSongId: nowPlaying.navidromeSongId,
             mode: nextMode,
-            token,
-            offsetSec: 0
+            token
           })
         };
         setNowPlaying(updatedTrack);
         setCurrentPlayback({
-          startOffsetSec: 0,
+          startOffsetSec: clampedResumeOffsetSec,
           reason: "manual"
         });
-        await playTrack(updatedTrack, 0, requestId);
+        await playTrack(updatedTrack, clampedResumeOffsetSec, requestId, {
+          shouldAutoPlay: shouldResumePlayback
+        });
       }
     } catch (err) {
       setAudioMode(previousMode);

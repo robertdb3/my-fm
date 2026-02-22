@@ -69,13 +69,14 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
       const offsetSec = queryParsed.data.offsetSec ?? 0;
       const bitrateKbps = queryParsed.data.bitrateKbps ?? defaultBitrateForMode(mode);
 
-      const sourceUrl = client.buildStreamUrl(params.navidromeSongId);
+      const sourceUrl = client.buildStreamUrl(params.navidromeSongId, {
+        timeOffsetSec: offsetSec
+      });
       const ffmpegPlan = buildFfmpegPlan({
         sourceUrl,
         mode,
         format: queryParsed.data.format,
-        bitrateKbps,
-        offsetSec
+        bitrateKbps
       });
 
       request.log.info(
