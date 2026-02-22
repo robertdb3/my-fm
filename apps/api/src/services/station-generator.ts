@@ -121,12 +121,12 @@ function getRecencyCutoff(avoidRepeatHours: number, now: Date): Date {
 export function buildCandidateFilter(rules: StationRules, now: Date): Prisma.TrackCacheWhereInput {
   const andClauses: Prisma.TrackCacheWhereInput[] = [];
 
-  const genresInclude = normalizeRuleList(rules.genresInclude);
-  const genresExclude = normalizeRuleList(rules.genresExclude);
-  const artistsInclude = normalizeRuleList(rules.artistsInclude);
-  const artistsExclude = normalizeRuleList(rules.artistsExclude);
-  const albumsInclude = normalizeRuleList(rules.albumsInclude);
-  const albumsExclude = normalizeRuleList(rules.albumsExclude);
+  const genresInclude = normalizeRuleList(rules.includeGenres);
+  const genresExclude = normalizeRuleList(rules.excludeGenres);
+  const artistsInclude = normalizeRuleList(rules.includeArtists);
+  const artistsExclude = normalizeRuleList(rules.excludeArtists);
+  const albumsInclude = normalizeRuleList(rules.includeAlbums);
+  const albumsExclude = normalizeRuleList(rules.excludeAlbums);
 
   if (genresInclude.length > 0) {
     andClauses.push({ genre: { in: genresInclude } });
@@ -152,20 +152,20 @@ export function buildCandidateFilter(rules: StationRules, now: Date): Prisma.Tra
     andClauses.push({ NOT: { album: { in: albumsExclude } } });
   }
 
-  if (rules.yearMin !== undefined || rules.yearMax !== undefined) {
+  if (rules.yearRange?.min !== undefined || rules.yearRange?.max !== undefined) {
     andClauses.push({
       year: {
-        ...(rules.yearMin !== undefined ? { gte: rules.yearMin } : {}),
-        ...(rules.yearMax !== undefined ? { lte: rules.yearMax } : {})
+        ...(rules.yearRange?.min !== undefined ? { gte: rules.yearRange.min } : {}),
+        ...(rules.yearRange?.max !== undefined ? { lte: rules.yearRange.max } : {})
       }
     });
   }
 
-  if (rules.durationMinSec !== undefined || rules.durationMaxSec !== undefined) {
+  if (rules.durationRange?.minSec !== undefined || rules.durationRange?.maxSec !== undefined) {
     andClauses.push({
       durationSec: {
-        ...(rules.durationMinSec !== undefined ? { gte: rules.durationMinSec } : {}),
-        ...(rules.durationMaxSec !== undefined ? { lte: rules.durationMaxSec } : {})
+        ...(rules.durationRange?.minSec !== undefined ? { gte: rules.durationRange.minSec } : {}),
+        ...(rules.durationRange?.maxSec !== undefined ? { lte: rules.durationRange.maxSec } : {})
       }
     });
   }
@@ -185,20 +185,23 @@ export function buildCandidateFilter(rules: StationRules, now: Date): Prisma.Tra
   return { AND: andClauses };
 }
 
+export async function getStationPreviewCount(rules: StationRules, now = new Date()): Promise<number> {
+  const where = buildCandidateFilter(rules, now);
+  return prisma.trackCache.count({ where });
+}
+
 function buildFilterSignature(rules: StationRules, now: Date): string {
   const hourBucket = Math.floor(now.getTime() / HOUR_MS);
 
   return JSON.stringify({
-    genresInclude: [...normalizeRuleList(rules.genresInclude)].sort(),
-    genresExclude: [...normalizeRuleList(rules.genresExclude)].sort(),
-    artistsInclude: [...normalizeRuleList(rules.artistsInclude)].sort(),
-    artistsExclude: [...normalizeRuleList(rules.artistsExclude)].sort(),
-    albumsInclude: [...normalizeRuleList(rules.albumsInclude)].sort(),
-    albumsExclude: [...normalizeRuleList(rules.albumsExclude)].sort(),
-    yearMin: rules.yearMin,
-    yearMax: rules.yearMax,
-    durationMinSec: rules.durationMinSec,
-    durationMaxSec: rules.durationMaxSec,
+    includeGenres: [...normalizeRuleList(rules.includeGenres)].sort(),
+    excludeGenres: [...normalizeRuleList(rules.excludeGenres)].sort(),
+    includeArtists: [...normalizeRuleList(rules.includeArtists)].sort(),
+    excludeArtists: [...normalizeRuleList(rules.excludeArtists)].sort(),
+    includeAlbums: [...normalizeRuleList(rules.includeAlbums)].sort(),
+    excludeAlbums: [...normalizeRuleList(rules.excludeAlbums)].sort(),
+    yearRange: rules.yearRange ?? null,
+    durationRange: rules.durationRange ?? null,
     recentlyAddedDays: rules.recentlyAddedDays,
     recentlyAddedBucket: rules.recentlyAddedDays !== undefined ? hourBucket : null
   });
@@ -540,10 +543,6 @@ async function buildContext(
     });
   }
 
-  if (rules.minRating !== undefined && rules.minRating >= 4) {
-    candidatePool = candidatePool.filter((track) => feedbackMap.get(track.navidromeSongId)?.liked);
-  }
-
   if (candidatePool.length === 0) {
     throw new Error("No tracks match this station configuration");
   }
@@ -583,7 +582,7 @@ function pickNextTrack(params: {
     candidates: candidateSubset,
     disallowedTrackIds,
     recentArtistNames: state.recentArtistNames,
-    artistSeparation: context.rules.avoidSameArtistWithinTracks
+    artistSeparation: context.rules.artistSeparation
   });
 
   if (exclusionResult.tracks.length === 0) {
@@ -599,7 +598,7 @@ function pickNextTrack(params: {
       lastPlayedAt: context.lastPlayedMap.get(track.navidromeSongId),
       feedback: context.feedbackMap.get(track.navidromeSongId),
       recentArtistNames: state.recentArtistNames,
-      artistSeparation: context.rules.avoidSameArtistWithinTracks,
+      artistSeparation: context.rules.artistSeparation,
       now: context.now,
       seed: scoreSeed
     })

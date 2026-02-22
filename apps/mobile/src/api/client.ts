@@ -10,13 +10,19 @@ async function request<T>(
     token?: string | null;
   } = {}
 ) {
+  const hasBody = options.body !== undefined;
+  const headers: Record<string, string> = {
+    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
+  };
+
+  if (hasBody) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    headers,
+    body: hasBody ? JSON.stringify(options.body) : undefined
   });
 
   const payload = await response.json().catch(() => ({}));

@@ -36,7 +36,9 @@ packages/
   - year range
   - recently added window
   - duration range
-  - min rating (mapped to liked tracks in MVP)
+  - avoid repeat hours
+  - artist separation tracks
+- Structured station Rule Builder UI with live match preview
 - Stateful playback per station:
   - persistent recent tracks/artists window
   - avoid repeat track window (default 24h)
@@ -126,6 +128,9 @@ Notes:
 - `POST /api/library/import`
 - `GET /api/stations`
 - `POST /api/stations`
+- `GET /api/stations/rule-options?field=genre|artist|album&q=&limit=`
+- `GET /api/stations/preview?stationId=...`
+- `POST /api/stations/preview`
 - `GET /api/stations/:id`
 - `PUT /api/stations/:id`
 - `DELETE /api/stations/:id`

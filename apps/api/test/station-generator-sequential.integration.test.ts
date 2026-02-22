@@ -96,9 +96,9 @@ beforeAll(async () => {
       name: "Large Rock Pool",
       description: "For non-repeat integration test",
       rules: {
-        genresInclude: ["Rock"],
+        includeGenres: ["Rock"],
         avoidRepeatHours: 24,
-        avoidSameArtistWithinTracks: 3
+        artistSeparation: 3
       },
       isEnabled: true
     }

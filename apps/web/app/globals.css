@@ -150,6 +150,68 @@ p.error {
   font-size: 0.92rem;
 }
 
+.multi-select-root {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.multi-select-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.multi-select-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #bcd4e3;
+  border-radius: 999px;
+  background: #eff6fb;
+  color: #0b486d;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.multi-select-tag button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  line-height: 1;
+}
+
+.multi-select-dropdown {
+  position: absolute;
+  top: calc(100% + 0.15rem);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  padding: 0.35rem;
+  display: grid;
+  gap: 0.2rem;
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.multi-select-option {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0.45rem 0.5rem;
+}
+
+.multi-select-option:hover {
+  background: #f2f6fa;
+}
+
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: repeat(1, minmax(0, 1fr));

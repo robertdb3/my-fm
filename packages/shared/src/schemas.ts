@@ -1,23 +1,96 @@
 import { z } from "zod";
 
-export const StationRulesSchema = z.object({
-  genresInclude: z.array(z.string().min(1)).default([]),
-  genresExclude: z.array(z.string().min(1)).default([]),
-  yearMin: z.number().int().min(1900).max(3000).optional(),
-  yearMax: z.number().int().min(1900).max(3000).optional(),
-  artistsInclude: z.array(z.string().min(1)).default([]),
-  artistsExclude: z.array(z.string().min(1)).default([]),
-  albumsInclude: z.array(z.string().min(1)).default([]),
-  albumsExclude: z.array(z.string().min(1)).default([]),
-  recentlyAddedDays: z.number().int().min(1).max(3650).optional(),
-  minRating: z.number().min(0).max(5).optional(),
-  durationMinSec: z.number().int().min(0).optional(),
-  durationMaxSec: z.number().int().min(0).optional(),
-  avoidRepeatHours: z.number().int().min(1).max(168).default(24),
-  avoidSameArtistWithinTracks: z.number().int().min(1).max(50).default(3),
-  preferLikedWeight: z.number().min(0).max(5).default(0.35),
-  preferUnplayedWeight: z.number().min(0).max(5).default(0.7)
-});
+const StringListSchema = z
+  .array(z.string().min(1))
+  .transform((items) => {
+    const trimmed = items.map((item) => item.trim()).filter(Boolean);
+    return Array.from(new Set(trimmed));
+  });
+
+const YearRangeSchema = z
+  .object({
+    min: z.number().int().min(1900).max(3000).optional(),
+    max: z.number().int().min(1900).max(3000).optional()
+  })
+  .partial()
+  .refine(
+    (value) => value.min === undefined || value.max === undefined || value.min <= value.max,
+    "yearRange.min must be <= yearRange.max"
+  );
+
+const DurationRangeSchema = z
+  .object({
+    minSec: z.number().int().min(0).optional(),
+    maxSec: z.number().int().min(0).optional()
+  })
+  .partial()
+  .refine(
+    (value) => value.minSec === undefined || value.maxSec === undefined || value.minSec <= value.maxSec,
+    "durationRange.minSec must be <= durationRange.maxSec"
+  );
+
+function normalizeLegacyStationRules(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+
+  const raw = input as Record<string, unknown>;
+
+  const yearRange =
+    raw.yearRange && typeof raw.yearRange === "object" && !Array.isArray(raw.yearRange)
+      ? raw.yearRange
+      : {
+          min: raw.yearMin,
+          max: raw.yearMax
+        };
+
+  const durationRange =
+    raw.durationRange && typeof raw.durationRange === "object" && !Array.isArray(raw.durationRange)
+      ? raw.durationRange
+      : {
+          minSec: raw.durationMinSec,
+          maxSec: raw.durationMaxSec
+        };
+
+  return {
+    includeGenres: raw.includeGenres ?? raw.genresInclude ?? [],
+    excludeGenres: raw.excludeGenres ?? raw.genresExclude ?? [],
+    includeArtists: raw.includeArtists ?? raw.artistsInclude ?? [],
+    excludeArtists: raw.excludeArtists ?? raw.artistsExclude ?? [],
+    includeAlbums: raw.includeAlbums ?? raw.albumsInclude ?? [],
+    excludeAlbums: raw.excludeAlbums ?? raw.albumsExclude ?? [],
+    yearRange,
+    durationRange,
+    recentlyAddedDays: raw.recentlyAddedDays,
+    avoidRepeatHours: raw.avoidRepeatHours,
+    artistSeparation: raw.artistSeparation ?? raw.avoidSameArtistWithinTracks
+  };
+}
+
+export const StationRulesSchema = z.preprocess(
+  normalizeLegacyStationRules,
+  z.object({
+    includeGenres: StringListSchema.default([]),
+    excludeGenres: StringListSchema.default([]),
+    includeArtists: StringListSchema.default([]),
+    excludeArtists: StringListSchema.default([]),
+    includeAlbums: StringListSchema.default([]),
+    excludeAlbums: StringListSchema.default([]),
+    yearRange: YearRangeSchema.optional(),
+    durationRange: DurationRangeSchema.optional(),
+    recentlyAddedDays: z.number().int().min(1).max(3650).optional(),
+    avoidRepeatHours: z.number().int().min(1).max(168).default(24),
+    artistSeparation: z.number().int().min(1).max(50).default(3)
+  })
+);
+
+export function validateStationRules(input: unknown) {
+  return StationRulesSchema.safeParse(input);
+}
+
+export function parseStationRules(input: unknown) {
+  return StationRulesSchema.parse(input);
+}
 
 export const StationSchema = z.object({
   id: z.string().cuid(),

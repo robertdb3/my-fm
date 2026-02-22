@@ -127,7 +127,7 @@ describe("stations endpoints", () => {
         name: "Rock Channel",
         description: "Rock-heavy station",
         rules: {
-          genresInclude: ["Rock"]
+          includeGenres: ["Rock"]
         },
         isEnabled: true
       }
@@ -146,6 +146,44 @@ describe("stations endpoints", () => {
 
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json().stations).toHaveLength(1);
+
+    const previewByIdResponse = await app.inject({
+      method: "GET",
+      url: `/api/stations/preview?stationId=${stationId}`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(previewByIdResponse.statusCode).toBe(200);
+    expect(previewByIdResponse.json().matchingTrackCount).toBe(2);
+
+    const previewByRulesResponse = await app.inject({
+      method: "POST",
+      url: "/api/stations/preview",
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
+      payload: {
+        rules: {
+          includeGenres: ["Pop"]
+        }
+      }
+    });
+
+    expect(previewByRulesResponse.statusCode).toBe(200);
+    expect(previewByRulesResponse.json().matchingTrackCount).toBe(1);
+
+    const ruleOptionsResponse = await app.inject({
+      method: "GET",
+      url: "/api/stations/rule-options?field=genre&q=Ro",
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(ruleOptionsResponse.statusCode).toBe(200);
+    expect(ruleOptionsResponse.json().options).toContain("Rock");
 
     const playResponse = await app.inject({
       method: "POST",

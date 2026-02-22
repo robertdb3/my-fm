@@ -1,4 +1,11 @@
-import type { CreateStationInput, FeedbackInput, NavidromeConnectionInput, Station, Track } from "@music-cable-box/shared";
+import type {
+  CreateStationInput,
+  FeedbackInput,
+  NavidromeConnectionInput,
+  Station,
+  StationRules,
+  Track
+} from "@music-cable-box/shared";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const TOKEN_KEY = "music-cable-box-token";
@@ -42,14 +49,19 @@ export async function apiRequest<T>(
   } = {}
 ): Promise<T> {
   const token = options.token ?? getAuthToken();
+  const hasBody = options.body !== undefined;
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+
+  if (hasBody) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    headers,
+    body: hasBody ? JSON.stringify(options.body) : undefined
   });
 
   const json = await response.json().catch(() => ({}));
@@ -76,6 +88,34 @@ export async function login(email: string, password: string) {
 export async function getStations(token?: string | null) {
   const data = await apiRequest<{ stations: Station[] }>("/api/stations", { token });
   return data.stations;
+}
+
+export async function getRuleOptions(
+  field: "genre" | "artist" | "album",
+  query: string,
+  token?: string | null
+) {
+  const params = new URLSearchParams({
+    field,
+    q: query,
+    limit: "20"
+  });
+
+  return apiRequest<{ options: string[] }>(`/api/stations/rule-options?${params.toString()}`, { token });
+}
+
+export async function previewStationRules(
+  payload: {
+    stationId?: string;
+    rules?: StationRules;
+  },
+  token?: string | null
+) {
+  return apiRequest<{ matchingTrackCount: number }>("/api/stations/preview", {
+    method: "POST",
+    body: payload,
+    token
+  });
 }
 
 export async function createStationApi(input: CreateStationInput, token?: string | null) {
