@@ -1,0 +1,113 @@
+import type { Station, Track } from "@music-cable-box/shared";
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
+
+async function request<T>(
+  path: string,
+  options: {
+    method?: string;
+    body?: unknown;
+    token?: string | null;
+  } = {}
+) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: options.method ?? "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = (payload as { error?: { message?: string } }).error?.message ?? "Request failed";
+    throw new Error(message);
+  }
+
+  return payload as T;
+}
+
+export async function login(email: string, password: string) {
+  return request<{ token: string }>("/api/auth/login", {
+    method: "POST",
+    body: {
+      email,
+      password
+    }
+  });
+}
+
+export async function getStations(token: string) {
+  const response = await request<{ stations: Station[] }>("/api/stations", { token });
+  return response.stations;
+}
+
+export async function playStation(stationId: string, token: string) {
+  return request<{ nowPlaying: Track; nextUp: Track[] }>(`/api/stations/${stationId}/play`, {
+    method: "POST",
+    token
+  });
+}
+
+export async function nextTrack(
+  stationId: string,
+  token: string,
+  payload?: {
+    previousTrackId?: string;
+    listenSeconds?: number;
+    skipped?: boolean;
+  }
+) {
+  return request<{ track: Track }>(`/api/stations/${stationId}/next`, {
+    method: "POST",
+    body: payload,
+    token
+  });
+}
+
+export async function peekStation(stationId: string, token: string, n = 10) {
+  return request<{ tracks: Track[] }>(`/api/stations/${stationId}/peek?n=${n}`, { token });
+}
+
+export async function submitFeedback(
+  token: string,
+  payload: {
+    navidromeSongId: string;
+    liked: boolean;
+    disliked: boolean;
+  }
+) {
+  return request("/api/feedback", {
+    method: "POST",
+    token,
+    body: payload
+  });
+}
+
+export async function testNavidrome(
+  token: string,
+  payload: {
+    baseUrl: string;
+    username: string;
+    password: string;
+  }
+) {
+  return request("/api/navidrome/test-connection", {
+    method: "POST",
+    token,
+    body: payload
+  });
+}
+
+export async function importLibrary(token: string, payload: { fullResync: boolean; maxArtists: number }) {
+  return request<{ result: { importedTracks: number; importedAlbums: number; importedArtists: number } }>(
+    "/api/library/import",
+    {
+      method: "POST",
+      token,
+      body: payload
+    }
+  );
+}

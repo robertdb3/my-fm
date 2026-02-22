@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Music Cable Box",
+    "slug": "music-cable-box",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f7f4ef"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": { "backgroundColor": "#f7f4ef" }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

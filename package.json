@@ -1,0 +1,19 @@
+{
+  "name": "music-cable-box",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.5.2",
+  "scripts": {
+    "dev": "turbo run dev --parallel --filter=@music-cable-box/shared --filter=@music-cable-box/api --filter=@music-cable-box/web",
+    "dev:mobile": "turbo run dev --parallel --filter=@music-cable-box/mobile",
+    "dev:all": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "echo \"Configure a formatter per workspace if needed\""
+  },
+  "devDependencies": {
+    "turbo": "^2.4.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,74 +1,33 @@
-# === OS / Editor ===
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+# dependencies
+node_modules
+.pnpm-store
 
-.vscode/
-.idea/
-*.swp
-*.swo
+# build
+dist
+.next
+coverage
 
-# === Logs ===
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# === Node / JS ===
-node_modules/
-.pnpm-store/
-.pnp.*
-.npm/
-.eslintcache
-*.tsbuildinfo
-coverage/
-.nyc_output/
-
-# === Next.js / Web builds ===
-.next/
-out/
-dist/
-build/
-.vercel/
-.turbo/
-.cache/
-
-# === Expo / React Native ===
-.expo/
-.expo-shared/
-web-build/
-android/
-ios/
-*.jks
-*.keystore
-*.mobileprovision
-
-# === Env files ===
+# env
 .env
 .env.*
 !.env.example
 
-# === Prisma / SQLite ===
-prisma/dev.db
-prisma/dev.db-journal
-prisma/*.db
-prisma/*.db-journal
-*.sqlite
-*.sqlite3
+# prisma
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+apps/api/prisma/test.db
+apps/api/prisma/test.db-journal
+apps/api/dev.db
+apps/api/dev.db-journal
 
-# === Docker ===
-**/.docker/
+# logs
+*.log
 
-# === Misc ===
-tmp/
-temp/
-*.pem
-*.key
+# turbo
+.turbo
+
+# expo
+.expo
+
+# misc
+.DS_Store

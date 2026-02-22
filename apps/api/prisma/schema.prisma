@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String             @id @default(cuid())
+  email            String?            @unique
+  createdAt        DateTime           @default(now())
+  navidromeAccount NavidromeAccount?
+  stations         Station[]
+  stationStates    StationState[]
+  playEvents       PlayEvent[]
+  trackFeedback    TrackFeedback[]
+}
+
+model NavidromeAccount {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseUrl   String
+  username  String
+  token     String
+  salt      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TrackCache {
+  id              String    @id @default(cuid())
+  navidromeSongId String    @unique
+  title           String
+  artist          String
+  album           String?
+  albumArtist     String?
+  genre           String?
+  year            Int?
+  durationSec     Int?
+  path            String?
+  coverArtId      String?
+  addedAt         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([genre])
+  @@index([year])
+  @@index([artist])
+  @@index([album])
+  @@index([addedAt])
+}
+
+model Station {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  rulesJson   Json
+  isEnabled   Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  state       StationState?
+  playEvents  PlayEvent[]
+
+  @@index([userId, isEnabled])
+}
+
+model StationState {
+  stationId              String   @id
+  userId                 String
+  station                Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastPlayedAt           DateTime?
+  lastTrackId            String?
+  recentTrackIdsJson     Json
+  recentArtistNamesJson  Json
+  updatedAt              DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model PlayEvent {
+  id              String   @id @default(cuid())
+  userId          String
+  stationId       String
+  navidromeSongId String
+  playedAt        DateTime @default(now())
+  skipped         Boolean  @default(false)
+  listenSeconds   Int?
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  station         Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, playedAt])
+  @@index([stationId, playedAt])
+  @@index([navidromeSongId])
+}
+
+model TrackFeedback {
+  id              String   @id @default(cuid())
+  userId          String
+  navidromeSongId String
+  liked           Boolean  @default(false)
+  disliked        Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, navidromeSongId])
+  @@index([userId, navidromeSongId])
+}

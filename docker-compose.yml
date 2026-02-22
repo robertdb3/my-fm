@@ -1,0 +1,28 @@
+services:
+  api:
+    image: node:20-bullseye
+    working_dir: /workspace
+    command: sh -lc "npm install -g pnpm && pnpm install && pnpm --filter @music-cable-box/api prisma:generate && pnpm --filter @music-cable-box/api prisma:push && pnpm --filter @music-cable-box/api dev"
+    volumes:
+      - .:/workspace
+      - api-prisma:/workspace/apps/api/prisma
+    env_file:
+      - ./apps/api/.env
+    ports:
+      - "4000:4000"
+
+  web:
+    image: node:20-bullseye
+    working_dir: /workspace
+    command: sh -lc "npm install -g pnpm && pnpm install && pnpm --filter @music-cable-box/web dev -- --hostname 0.0.0.0 --port 3000"
+    volumes:
+      - .:/workspace
+    env_file:
+      - ./apps/web/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  api-prisma:
