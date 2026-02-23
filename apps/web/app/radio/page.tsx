@@ -21,6 +21,10 @@ interface PlaybackMeta {
   reason: string;
 }
 
+type RadioUiMode = "MODERN" | "RETRO_AM";
+
+const RADIO_UI_MODE_STORAGE_KEY = "music-cable-box.radio.ui-mode";
+
 function clampStartOffset(track: Track, startOffsetSec: number): number {
   const durationSec = track.durationSec ?? 0;
   if (!Number.isFinite(startOffsetSec) || startOffsetSec <= 0) {
@@ -68,6 +72,7 @@ export default function RadioPage() {
   const [error, setError] = useState<string | null>(null);
   const [audioMode, setAudioMode] = useState<AudioMode>("UNMODIFIED");
   const [audioModePending, setAudioModePending] = useState(false);
+  const [uiMode, setUiMode] = useState<RadioUiMode>("MODERN");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const tuneTimeoutRef = useRef<number | null>(null);
@@ -149,6 +154,25 @@ export default function RadioPage() {
 
     setCurrentIndex((value) => clampTunerIndex(value, stations.length));
   }, [stations.length]);
+
+  useEffect(() => {
+    try {
+      const storedValue = window.localStorage.getItem(RADIO_UI_MODE_STORAGE_KEY);
+      if (storedValue === "MODERN" || storedValue === "RETRO_AM") {
+        setUiMode(storedValue);
+      }
+    } catch {
+      // ignore storage read errors
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(RADIO_UI_MODE_STORAGE_KEY, uiMode);
+    } catch {
+      // ignore storage write errors
+    }
+  }, [uiMode]);
 
   function beginSwitchRequest(): number {
     switchRequestIdRef.current += 1;
@@ -554,106 +578,221 @@ export default function RadioPage() {
     }
   }
 
+  function renderAudioModeButtons(retro: boolean) {
+    const modeOptions: Array<{ mode: AudioMode; label: string }> = [
+      { mode: "UNMODIFIED", label: "Clean" },
+      { mode: "FM", label: "FM" },
+      { mode: "AM", label: "AM" }
+    ];
+
+    return (
+      <div className={retro ? "retro-mode-buttons" : "radio-audio-mode-buttons"}>
+        {retro ? (
+          <span className="retro-strip-label">Audio Tone</span>
+        ) : (
+          <span className="meta" style={{ alignSelf: "center", marginBottom: 0 }}>
+            Audio:
+          </span>
+        )}
+        {modeOptions.map((option) => (
+          <button
+            key={option.mode}
+            type="button"
+            className={
+              retro
+                ? audioMode === option.mode
+                  ? "retro-mode-button active"
+                  : "retro-mode-button"
+                : audioMode === option.mode
+                  ? "primary"
+                  : undefined
+            }
+            onClick={() => void onChangeAudioMode(option.mode)}
+            disabled={audioModePending}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  const isRetroMode = uiMode === "RETRO_AM";
+
   if (!token) {
     return <section className="card">Checking auth...</section>;
   }
 
   return (
-    <div className="grid">
-      <section className="card" style={{ gridColumn: "span 7" }}>
-        <h2>Radio Tuner</h2>
+    <div className={`grid radio-screen${isRetroMode ? " radio-screen-retro" : ""}`}>
+      <section className={`card ${isRetroMode ? "retro-tuner-card" : ""}`} style={{ gridColumn: "span 7" }}>
+        <div className="radio-screen-header">
+          <h2>{isRetroMode ? "AM Car Radio" : "Radio Tuner"}</h2>
+          <div className="radio-ui-toggle" role="group" aria-label="Radio layout">
+            <button
+              type="button"
+              className={uiMode === "MODERN" ? "primary" : undefined}
+              onClick={() => setUiMode("MODERN")}
+            >
+              Modern
+            </button>
+            <button
+              type="button"
+              className={uiMode === "RETRO_AM" ? "primary" : undefined}
+              onClick={() => setUiMode("RETRO_AM")}
+            >
+              Retro AM
+            </button>
+          </div>
+        </div>
         {stations.length === 0 ? <p className="meta">No stations available. Generate channels first.</p> : null}
         {currentStation ? (
-          <>
-            <div className="tuner-display">
-              <p className="tuner-frequency">{currentStation.frequencyLabel}</p>
-              <p className="tuner-station">{currentStation.name}</p>
-              {isScanning ? <p className="meta">Scanning...</p> : null}
+          isRetroMode ? (
+            <div className="retro-radio-shell">
+              <div className="retro-faceplate">
+                <div className="retro-dial-window">
+                  <div className="retro-dial-row">
+                    <span className="retro-band-pill">AM</span>
+                    <p className="retro-frequency">{currentStation.frequencyLabel}</p>
+                  </div>
+                  <p className="retro-station-name">{currentStation.name}</p>
+                  <p className="retro-lock-state">{isScanning ? "Scanning..." : "Signal locked"}</p>
+                </div>
+
+                <div className="retro-scale-wrap">
+                  <div className="retro-scale-markers">
+                    <span>530</span>
+                    <span>700</span>
+                    <span>900</span>
+                    <span>1100</span>
+                    <span>1300</span>
+                    <span>1500</span>
+                    <span>1700</span>
+                  </div>
+                  <input
+                    className="retro-tuner-slider"
+                    type="range"
+                    min={0}
+                    max={Math.max(0, stations.length - 1)}
+                    value={currentIndex}
+                    onChange={(event) => {
+                      scheduleTune(Number(event.target.value), false);
+                    }}
+                    onMouseUp={() => scheduleTune(currentIndexRef.current, true)}
+                    onTouchEnd={() => scheduleTune(currentIndexRef.current, true)}
+                    disabled={stations.length === 0}
+                    aria-label="AM tuner dial"
+                  />
+                </div>
+
+                <div className="retro-controls-row">
+                  <button
+                    type="button"
+                    className="retro-knob-button"
+                    onClick={() => {
+                      setIsScanning(false);
+                      void stepStation("PREV");
+                    }}
+                    disabled={stations.length === 0}
+                  >
+                    ◀ Seek
+                  </button>
+                  <button
+                    type="button"
+                    className="retro-knob-button"
+                    onClick={() => {
+                      setIsScanning(false);
+                      void stepStation("NEXT");
+                    }}
+                    disabled={stations.length === 0}
+                  >
+                    Seek ▶
+                  </button>
+                  <button
+                    type="button"
+                    className={isScanning ? "retro-knob-button danger" : "retro-knob-button"}
+                    onClick={() => setIsScanning((value) => !value)}
+                    disabled={stations.length === 0}
+                  >
+                    {isScanning ? "Stop Scan" : "Scan"}
+                  </button>
+                </div>
+
+                {renderAudioModeButtons(true)}
+                <p className="meta retro-help-text">
+                  Clean = studio feed, FM = broadcast polish, AM = vintage narrow-band.
+                </p>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="tuner-display">
+                <p className="tuner-frequency">{currentStation.frequencyLabel}</p>
+                <p className="tuner-station">{currentStation.name}</p>
+                {isScanning ? <p className="meta">Scanning...</p> : null}
+              </div>
 
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
-              <span className="meta" style={{ alignSelf: "center", marginBottom: 0 }}>
-                Audio:
-              </span>
-              <button
-                type="button"
-                className={audioMode === "UNMODIFIED" ? "primary" : undefined}
-                onClick={() => void onChangeAudioMode("UNMODIFIED")}
-                disabled={audioModePending}
-              >
-                Clean
-              </button>
-              <button
-                type="button"
-                className={audioMode === "FM" ? "primary" : undefined}
-                onClick={() => void onChangeAudioMode("FM")}
-                disabled={audioModePending}
-              >
-                FM
-              </button>
-              <button
-                type="button"
-                className={audioMode === "AM" ? "primary" : undefined}
-                onClick={() => void onChangeAudioMode("AM")}
-                disabled={audioModePending}
-              >
-                AM
-              </button>
-            </div>
-            <p className="meta" style={{ marginBottom: "0.6rem" }}>
-              FM = mild radio coloration. AM = narrow-band vintage radio.
-            </p>
+              {renderAudioModeButtons(false)}
+              <p className="meta" style={{ marginBottom: "0.6rem" }}>
+                FM = mild radio coloration. AM = narrow-band vintage radio.
+              </p>
 
-            <input
-              className="tuner-slider"
-              type="range"
-              min={0}
-              max={Math.max(0, stations.length - 1)}
-              value={currentIndex}
-              onChange={(event) => {
-                scheduleTune(Number(event.target.value), false);
-              }}
-              onMouseUp={() => scheduleTune(currentIndexRef.current, true)}
-              onTouchEnd={() => scheduleTune(currentIndexRef.current, true)}
-              disabled={stations.length === 0}
-            />
-
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.8rem" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsScanning(false);
-                  void stepStation("PREV");
+              <input
+                className="tuner-slider"
+                type="range"
+                min={0}
+                max={Math.max(0, stations.length - 1)}
+                value={currentIndex}
+                onChange={(event) => {
+                  scheduleTune(Number(event.target.value), false);
                 }}
+                onMouseUp={() => scheduleTune(currentIndexRef.current, true)}
+                onTouchEnd={() => scheduleTune(currentIndexRef.current, true)}
                 disabled={stations.length === 0}
-              >
-                ◀ Seek
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsScanning(false);
-                  void stepStation("NEXT");
-                }}
-                disabled={stations.length === 0}
-              >
-                Seek ▶
-              </button>
-              <button
-                type="button"
-                className={isScanning ? "danger" : "primary"}
-                onClick={() => setIsScanning((value) => !value)}
-                disabled={stations.length === 0}
-              >
-                {isScanning ? "Stop Scan" : "Scan"}
-              </button>
-            </div>
-          </>
+              />
+
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.8rem" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsScanning(false);
+                    void stepStation("PREV");
+                  }}
+                  disabled={stations.length === 0}
+                >
+                  ◀ Seek
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsScanning(false);
+                    void stepStation("NEXT");
+                  }}
+                  disabled={stations.length === 0}
+                >
+                  Seek ▶
+                </button>
+                <button
+                  type="button"
+                  className={isScanning ? "danger" : "primary"}
+                  onClick={() => setIsScanning((value) => !value)}
+                  disabled={stations.length === 0}
+                >
+                  {isScanning ? "Stop Scan" : "Scan"}
+                </button>
+              </div>
+            </>
+          )
         ) : null}
       </section>
 
-      <section className="card" style={{ gridColumn: "span 5" }}>
+      <section className={`card ${isRetroMode ? "retro-now-playing-card" : ""}`} style={{ gridColumn: "span 5" }}>
         <h2>Now Playing</h2>
+        {currentStation ? (
+          <p className={isRetroMode ? "retro-station-line" : "meta"}>
+            {currentStation.frequencyLabel} • {currentStation.name}
+          </p>
+        ) : null}
         {nowPlaying ? (
           <>
             <h3>{nowPlaying.title}</h3>
