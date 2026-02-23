@@ -65,6 +65,7 @@ export interface FfmpegPlanInput {
   mode: AudioMode;
   format?: string;
   bitrateKbps?: number;
+  offsetSec?: number;
 }
 
 export interface FfmpegPlan {
@@ -88,6 +89,8 @@ export function buildFfmpegPlan(input: FfmpegPlanInput): FfmpegPlan {
   const mode = parseAudioMode(input.mode);
   const format = normalizeFormat(input.format);
   const bitrateKbps = normalizeBitrateKbps(mode, input.bitrateKbps);
+  const offsetSec = normalizeOffsetSec(input.offsetSec);
+  const trimPrefix = offsetSec > 0 ? `atrim=start=${offsetSec},asetpts=PTS-STARTPTS,` : "";
 
   const args: string[] = ["-hide_banner", "-loglevel", "error", "-nostdin"];
   args.push("-i", input.sourceUrl, "-vn");
@@ -99,7 +102,7 @@ export function buildFfmpegPlan(input: FfmpegPlanInput): FfmpegPlan {
       "-i",
       "anoisesrc=color=white:amplitude=0.0025:sample_rate=44100",
       "-filter_complex",
-      "[0:a]highpass=f=80,lowpass=f=15000,acompressor=threshold=-18dB:ratio=2:attack=20:release=220[prog];[1:a]aformat=channel_layouts=stereo,highpass=f=400,lowpass=f=12000,volume=0.05[noise];[prog][noise]amix=inputs=2:duration=first:weights=1|0.12:normalize=0,alimiter=limit=0.95[outa]",
+      `[0:a]${trimPrefix}highpass=f=80,lowpass=f=15000,acompressor=threshold=-18dB:ratio=2:attack=20:release=220[prog];[1:a]aformat=channel_layouts=stereo,highpass=f=400,lowpass=f=12000,volume=0.05[noise];[prog][noise]amix=inputs=2:duration=first:weights=1|0.12:normalize=0,alimiter=limit=0.95[outa]`,
       "-map",
       "[outa]",
       "-ac",
@@ -112,13 +115,16 @@ export function buildFfmpegPlan(input: FfmpegPlanInput): FfmpegPlan {
       "-i",
       "anoisesrc=color=white:amplitude=0.01:sample_rate=22050",
       "-filter_complex",
-      "[0:a]aformat=channel_layouts=mono,highpass=f=300,lowpass=f=3400,acompressor=threshold=-26dB:ratio=4:attack=6:release=180,aresample=8000,aresample=22050,volume=1.2[prog];[1:a]aformat=channel_layouts=mono,highpass=f=200,lowpass=f=4000,volume=0.2[noise];[prog][noise]amix=inputs=2:duration=first:weights=1|0.35:normalize=0,alimiter=limit=0.9[outa]",
+      `[0:a]${trimPrefix}aformat=channel_layouts=mono,highpass=f=300,lowpass=f=3400,acompressor=threshold=-26dB:ratio=4:attack=6:release=180,aresample=8000,aresample=22050,volume=1.2[prog];[1:a]aformat=channel_layouts=mono,highpass=f=200,lowpass=f=4000,volume=0.2[noise];[prog][noise]amix=inputs=2:duration=first:weights=1|0.35:normalize=0,alimiter=limit=0.9[outa]`,
       "-map",
       "[outa]",
       "-ac",
       "1"
     );
   } else {
+    if (offsetSec > 0) {
+      args.push("-af", `atrim=start=${offsetSec},asetpts=PTS-STARTPTS`);
+    }
     args.push("-ac", "2");
   }
 

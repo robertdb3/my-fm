@@ -189,7 +189,7 @@ describe("stream proxy endpoint", () => {
     expect(latestSpawnArgs.join(" ")).toContain("lowpass=f=3400");
   });
 
-  it("passes offset to navidrome stream source as timeOffset", async () => {
+  it("applies offset through ffmpeg trim filters", async () => {
     const response = await app.inject({
       method: "GET",
       url: `/api/stream/song-offset?mode=FM&offsetSec=37&accessToken=${encodeURIComponent(authToken)}`
@@ -197,8 +197,8 @@ describe("stream proxy endpoint", () => {
 
     expect(response.statusCode).toBe(200);
     const args = latestSpawnArgs.join(" ");
-    expect(args).toContain("timeOffset=37");
-    expect(args).not.toContain("-ss ");
+    expect(args).toContain("atrim=start=37");
+    expect(args).not.toContain("timeOffset=37");
   });
 
   it("uses user settings mode when mode query is omitted", async () => {

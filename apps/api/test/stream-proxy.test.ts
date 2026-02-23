@@ -48,6 +48,26 @@ describe("stream proxy ffmpeg profiles", () => {
     expect(args).toContain("anoisesrc=");
     expect(args).toContain("alimiter=limit=0.9");
   });
+
+  it("applies trim filter when offset is provided", () => {
+    const unmodifiedPlan = buildFfmpegPlan({
+      sourceUrl: "https://navidrome.test/rest/stream.view?id=song-4",
+      mode: "UNMODIFIED",
+      format: "mp3",
+      offsetSec: 27
+    });
+
+    expect(unmodifiedPlan.args.join(" ")).toContain("-af atrim=start=27,asetpts=PTS-STARTPTS");
+
+    const fmPlan = buildFfmpegPlan({
+      sourceUrl: "https://navidrome.test/rest/stream.view?id=song-5",
+      mode: "FM",
+      format: "mp3",
+      offsetSec: 14
+    });
+
+    expect(fmPlan.args.join(" ")).toContain("[0:a]atrim=start=14,asetpts=PTS-STARTPTS,highpass=f=80");
+  });
 });
 
 describe("stream proxy url builder", () => {

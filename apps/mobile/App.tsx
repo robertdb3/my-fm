@@ -58,6 +58,25 @@ function clampStartOffset(track: Track, startOffsetSec: number): number {
   return Math.max(0, Math.min(startOffsetSec, Math.max(0, durationSec - 1)));
 }
 
+function getStreamOffsetSec(streamUrl: string): number {
+  try {
+    const url = new URL(streamUrl);
+    const raw = url.searchParams.get("offsetSec");
+    if (!raw) {
+      return 0;
+    }
+
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 0;
+    }
+
+    return parsed;
+  } catch {
+    return 0;
+  }
+}
+
 function TunerSlider({ value, min, max, onChange, onComplete }: TunerSliderProps) {
   const safeMax = Math.max(min, max);
   const range = Math.max(1, safeMax - min);
@@ -301,8 +320,10 @@ export default function App() {
       });
     }
     const shouldAutoPlay = options?.shouldAutoPlay ?? true;
-
-    const initialPositionMillis = Math.max(0, Math.round(startOffsetSec * 1000));
+    const clampedOffset = clampStartOffset(track, startOffsetSec);
+    const streamOffsetSec = getStreamOffsetSec(track.streamUrl);
+    const localSeekOffsetSec = Math.max(0, clampedOffset - streamOffsetSec);
+    const initialPositionMillis = Math.max(0, Math.round(localSeekOffsetSec * 1000));
 
     const { sound: createdSound } = await Audio.Sound.createAsync(
       {
@@ -633,12 +654,17 @@ export default function App() {
       if (nowPlaying) {
         let resumeOffsetSec = 0;
         let shouldResumePlayback = isPlaying;
+        const streamOffsetSec = getStreamOffsetSec(nowPlaying.streamUrl);
         if (soundRef.current) {
           const playbackStatus = await soundRef.current.getStatusAsync();
           if (playbackStatus.isLoaded) {
-            resumeOffsetSec = Math.max(0, playbackStatus.positionMillis / 1000);
+            resumeOffsetSec = Math.max(0, streamOffsetSec + playbackStatus.positionMillis / 1000);
             shouldResumePlayback = playbackStatus.isPlaying;
+          } else {
+            resumeOffsetSec = streamOffsetSec;
           }
+        } else {
+          resumeOffsetSec = streamOffsetSec;
         }
         const clampedResumeOffsetSec = clampStartOffset(nowPlaying, resumeOffsetSec);
 
@@ -648,7 +674,8 @@ export default function App() {
           streamUrl: buildProxyStreamUrl({
             navidromeSongId: nowPlaying.navidromeSongId,
             mode: nextMode,
-            token
+            token,
+            offsetSec: clampedResumeOffsetSec
           })
         };
         setNowPlaying(updatedTrack);

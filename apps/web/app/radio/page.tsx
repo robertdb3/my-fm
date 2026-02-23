@@ -34,6 +34,25 @@ function clampStartOffset(track: Track, startOffsetSec: number): number {
   return Math.max(0, Math.min(startOffsetSec, Math.max(0, durationSec - 1)));
 }
 
+function getStreamOffsetSec(streamUrl: string): number {
+  try {
+    const url = new URL(streamUrl);
+    const raw = url.searchParams.get("offsetSec");
+    if (!raw) {
+      return 0;
+    }
+
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 0;
+    }
+
+    return parsed;
+  } catch {
+    return 0;
+  }
+}
+
 export default function RadioPage() {
   const token = useRequireAuth();
   const [stations, setStations] = useState<TunerStation[]>([]);
@@ -197,9 +216,11 @@ export default function RadioPage() {
     }
 
     const clampedOffset = clampStartOffset(track, startOffsetSec);
-    if (clampedOffset > 0) {
+    const streamOffsetSec = getStreamOffsetSec(track.streamUrl);
+    const localSeekOffsetSec = Math.max(0, clampedOffset - streamOffsetSec);
+    if (localSeekOffsetSec > 0) {
       try {
-        audio.currentTime = clampedOffset;
+        audio.currentTime = localSeekOffsetSec;
       } catch {
         // ignore seek failures before the first playable frame
       }
@@ -478,11 +499,12 @@ export default function RadioPage() {
 
       if (nowPlaying) {
         const audio = audioRef.current;
+        const streamOffsetSec = getStreamOffsetSec(nowPlaying.streamUrl);
         const resumeOffsetSec = clampStartOffset(
           nowPlaying,
           audio && Number.isFinite(audio.currentTime) && audio.currentTime > 0
-            ? audio.currentTime
-            : 0
+            ? streamOffsetSec + audio.currentTime
+            : streamOffsetSec
         );
         const shouldResumePlayback = audio ? !audio.paused : isPlaying;
         const requestId = beginSwitchRequest();
@@ -490,7 +512,8 @@ export default function RadioPage() {
           ...nowPlaying,
           streamUrl: buildProxyStreamUrl({
             navidromeSongId: nowPlaying.navidromeSongId,
-            mode: nextMode
+            mode: nextMode,
+            offsetSec: resumeOffsetSec
           })
         };
         setNowPlaying(updatedTrack);

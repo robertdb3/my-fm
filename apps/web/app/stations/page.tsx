@@ -22,6 +22,25 @@ import {
 import { StationListPanel } from "../../src/components/stations/station-list-panel";
 import { useRequireAuth } from "../../src/lib/useRequireAuth";
 
+function getStreamOffsetSec(streamUrl: string): number {
+  try {
+    const url = new URL(streamUrl);
+    const raw = url.searchParams.get("offsetSec");
+    if (!raw) {
+      return 0;
+    }
+
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 0;
+    }
+
+    return parsed;
+  } catch {
+    return 0;
+  }
+}
+
 export default function StationsPage() {
   const token = useRequireAuth();
 
@@ -155,9 +174,11 @@ export default function StationsPage() {
         return;
       }
 
-      if (clampedStartOffset > 0) {
+      const streamOffsetSec = getStreamOffsetSec(nowPlaying.streamUrl);
+      const localSeekOffsetSec = Math.max(0, clampedStartOffset - streamOffsetSec);
+      if (localSeekOffsetSec > 0) {
         try {
-          audio.currentTime = clampedStartOffset;
+          audio.currentTime = localSeekOffsetSec;
         } catch {
           // ignore seek failures before the first playable frame
         }

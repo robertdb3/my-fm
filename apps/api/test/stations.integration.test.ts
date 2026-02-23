@@ -206,6 +206,8 @@ describe("stations endpoints", () => {
     expect(payload.playback.reason).toBe("tune_in");
     expect(payload.playback.startOffsetSec).toBeGreaterThanOrEqual(8);
     expect(payload.playback.startOffsetSec).toBeLessThan(payload.nowPlaying.durationSec);
+    const playStreamUrl = new URL(payload.nowPlaying.streamUrl);
+    expect(playStreamUrl.searchParams.get("offsetSec")).toBe(String(payload.playback.startOffsetSec));
 
     const createNoTuneInResponse = await app.inject({
       method: "POST",
@@ -239,6 +241,8 @@ describe("stations endpoints", () => {
 
     expect(noTunePlayResponse.statusCode).toBe(200);
     expect(noTunePlayResponse.json().playback.startOffsetSec).toBe(0);
+    const noTuneStreamUrl = new URL(noTunePlayResponse.json().nowPlaying.streamUrl);
+    expect(noTuneStreamUrl.searchParams.get("offsetSec")).toBeNull();
 
     const stepResponse = await app.inject({
       method: "POST",

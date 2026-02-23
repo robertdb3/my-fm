@@ -62,6 +62,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       year?: number | null;
     };
     mode: AudioMode;
+    offsetSec?: number;
     request: {
       headers: Record<string, unknown>;
       protocol: string;
@@ -74,7 +75,8 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
         origin: getRequestOrigin(params.request),
         navidromeSongId: params.track.navidromeSongId,
         mode: params.mode,
-        accessToken: params.accessToken
+        accessToken: params.accessToken,
+        offsetSec: params.offsetSec
       })
     };
   };
@@ -205,7 +207,8 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           track: result.track,
           mode,
           request,
-          accessToken
+          accessToken,
+          offsetSec: result.playback.startOffsetSec
         });
         const proxiedNextUp = nextUp.map((track) =>
           toProxyTrack({
@@ -500,7 +503,8 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           track: nowPlaying.track,
           mode,
           request,
-          accessToken
+          accessToken,
+          offsetSec: nowPlaying.playback.startOffsetSec
         });
         const proxiedNextUp = nextUp.map((track) =>
           toProxyTrack({
