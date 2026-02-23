@@ -312,6 +312,22 @@ p.error {
   border-radius: 22px;
 }
 
+.radio-screen-retro-fm {
+  position: relative;
+}
+
+.radio-screen-retro-fm::before {
+  content: "";
+  position: absolute;
+  inset: -1.25rem -1rem;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(137, 178, 212, 0.16), transparent 32%),
+    radial-gradient(circle at 82% 70%, rgba(63, 109, 146, 0.16), transparent 38%),
+    linear-gradient(160deg, #0f141a 0%, #1e2a36 46%, #11171e 100%);
+  z-index: -1;
+  border-radius: 22px;
+}
+
 .retro-tuner-card {
   border: 1px solid #4e3323;
   background:
@@ -545,6 +561,247 @@ p.error {
   letter-spacing: 0.02em;
 }
 
+.retro-fm-tuner-card {
+  border: 1px solid #4b5966;
+  background:
+    repeating-linear-gradient(
+      170deg,
+      #303b45 0,
+      #303b45 12px,
+      #3b4954 12px,
+      #3b4954 24px,
+      #2f3943 24px,
+      #2f3943 36px
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(215, 230, 245, 0.18),
+    inset 0 -8px 18px rgba(17, 23, 30, 0.42),
+    0 18px 34px rgba(8, 11, 15, 0.35);
+  color: #e4edf5;
+}
+
+.retro-fm-tuner-card h2 {
+  color: #d8e8f6;
+  letter-spacing: 0.04em;
+}
+
+.retro-fm-tuner-card .radio-ui-toggle button {
+  border-color: #687988;
+  background: rgba(27, 35, 45, 0.72);
+  color: #d6e4f0;
+}
+
+.retro-fm-tuner-card .radio-ui-toggle button.primary {
+  border-color: #67a9de;
+  background: linear-gradient(180deg, #8bc0e8 0%, #4f8fbd 100%);
+  color: #0f1820;
+}
+
+.retro-fm-shell {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.retro-fm-faceplate {
+  border: 1px solid #222d37;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, #7f8d99 0%, #596775 12%, #434f5a 68%, #3d4854 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -10px 14px rgba(14, 18, 24, 0.25);
+  padding: 0.95rem;
+}
+
+.retro-fm-display {
+  border-radius: 11px;
+  border: 1px solid #131b23;
+  background: linear-gradient(180deg, #09111a 0%, #060b12 100%);
+  box-shadow:
+    inset 0 0 24px rgba(94, 189, 255, 0.14),
+    inset 0 0 6px rgba(21, 121, 177, 0.25);
+  padding: 0.85rem 0.9rem;
+}
+
+.retro-fm-band-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.retro-fm-band-pill,
+.retro-fm-stereo-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #2b4c64;
+  background: rgba(16, 46, 68, 0.34);
+  color: #9fd8ff;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.48rem;
+}
+
+.retro-fm-frequency {
+  margin: 0.35rem 0 0;
+  font-family: "Courier New", "Lucida Console", monospace;
+  font-size: clamp(2.1rem, 6.6vw, 3.6rem);
+  font-weight: 700;
+  color: #9be2ff;
+  letter-spacing: 0.09em;
+  text-shadow:
+    0 0 10px rgba(64, 185, 255, 0.55),
+    0 0 22px rgba(54, 135, 196, 0.42);
+}
+
+.retro-fm-station {
+  margin: 0.24rem 0 0;
+  color: #cae4f8;
+  font-size: 1rem;
+}
+
+.retro-fm-state {
+  margin: 0.3rem 0 0;
+  color: #8cb7d6;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.retro-fm-scale-wrap {
+  margin-top: 0.7rem;
+  border-radius: 10px;
+  border: 1px solid #2b3642;
+  background: linear-gradient(180deg, rgba(18, 24, 31, 0.46) 0%, rgba(11, 16, 22, 0.56) 100%);
+  padding: 0.62rem;
+}
+
+.retro-fm-scale-markers {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.34rem;
+  color: #a8c4d8;
+  font-size: 0.72rem;
+  font-family: "Courier New", "Lucida Console", monospace;
+}
+
+.retro-fm-scale-markers span {
+  text-align: center;
+}
+
+.retro-fm-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: #6bb2de;
+}
+
+.retro-fm-controls-row {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.retro-fm-button {
+  border: 1px solid #25303b;
+  border-radius: 8px;
+  color: #d8e9f7;
+  background:
+    linear-gradient(180deg, #4f5d6b 0%, #3b4551 52%, #2f3944 100%);
+  min-width: 7rem;
+  letter-spacing: 0.03em;
+}
+
+.retro-fm-button:hover {
+  border-color: #6da6d3;
+}
+
+.retro-fm-button.active {
+  border-color: #5ca3d8;
+  background: linear-gradient(180deg, #6cb2de 0%, #3e7da9 100%);
+  color: #0d1a24;
+}
+
+.retro-fm-mode-buttons {
+  margin-top: 0.82rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(31, 42, 51, 0.52);
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.retro-fm-strip-label {
+  align-self: center;
+  color: #c3d9eb;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.74rem;
+  margin-right: 0.2rem;
+}
+
+.retro-fm-mode-button {
+  border: 1px solid #31414f;
+  background: rgba(24, 33, 43, 0.6);
+  color: #d6e4f1;
+}
+
+.retro-fm-mode-button.active {
+  border-color: #69aee0;
+  background: linear-gradient(180deg, #82bee7 0%, #4b8fbe 100%);
+  color: #0f1c27;
+}
+
+.retro-fm-help-text {
+  color: #d5e5f3;
+  margin-top: 0.58rem;
+}
+
+.retro-fm-now-playing-card {
+  border: 1px solid #4b5966;
+  background: linear-gradient(180deg, #1f2a36 0%, #161f28 100%);
+  box-shadow: inset 0 0 0 1px rgba(174, 204, 229, 0.14);
+  color: #dfebf5;
+}
+
+.retro-fm-now-playing-card h2,
+.retro-fm-now-playing-card h3 {
+  color: #d8e9f7;
+}
+
+.retro-fm-now-playing-card .meta {
+  color: #b6ccde;
+}
+
+.retro-fm-now-playing-card button {
+  border-color: #3f5061;
+  background: rgba(31, 42, 52, 0.62);
+  color: #d5e6f4;
+}
+
+.retro-fm-now-playing-card button.primary {
+  border-color: #5d9fd0;
+  background: linear-gradient(180deg, #7abbe5 0%, #4684b2 100%);
+  color: #0e1c27;
+}
+
+.retro-fm-now-playing-card .queue {
+  color: #deebf6;
+}
+
+.retro-fm-now-playing-card p.error {
+  color: #ffbec0;
+}
+
+.retro-fm-station-line {
+  margin: 0 0 0.55rem;
+  color: #bdd7eb;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -560,6 +817,14 @@ p.error {
   }
 
   .retro-knob-button {
+    min-width: 6.2rem;
+  }
+
+  .retro-fm-controls-row {
+    gap: 0.35rem;
+  }
+
+  .retro-fm-button {
     min-width: 6.2rem;
   }
 }

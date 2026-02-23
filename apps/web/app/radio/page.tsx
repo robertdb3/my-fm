@@ -21,7 +21,7 @@ interface PlaybackMeta {
   reason: string;
 }
 
-type RadioUiMode = "MODERN" | "RETRO_AM";
+type RadioUiMode = "MODERN" | "RETRO_AM" | "RETRO_FM";
 
 const RADIO_UI_MODE_STORAGE_KEY = "music-cable-box.radio.ui-mode";
 
@@ -158,7 +158,7 @@ export default function RadioPage() {
   useEffect(() => {
     try {
       const storedValue = window.localStorage.getItem(RADIO_UI_MODE_STORAGE_KEY);
-      if (storedValue === "MODERN" || storedValue === "RETRO_AM") {
+      if (storedValue === "MODERN" || storedValue === "RETRO_AM" || storedValue === "RETRO_FM") {
         setUiMode(storedValue);
       }
     } catch {
@@ -578,7 +578,7 @@ export default function RadioPage() {
     }
   }
 
-  function renderAudioModeButtons(retro: boolean) {
+  function renderAudioModeButtons(variant: "default" | "retro-am" | "retro-fm") {
     const modeOptions: Array<{ mode: AudioMode; label: string }> = [
       { mode: "UNMODIFIED", label: "Clean" },
       { mode: "FM", label: "FM" },
@@ -586,9 +586,19 @@ export default function RadioPage() {
     ];
 
     return (
-      <div className={retro ? "retro-mode-buttons" : "radio-audio-mode-buttons"}>
-        {retro ? (
+      <div
+        className={
+          variant === "retro-am"
+            ? "retro-mode-buttons"
+            : variant === "retro-fm"
+              ? "retro-fm-mode-buttons"
+              : "radio-audio-mode-buttons"
+        }
+      >
+        {variant === "retro-am" ? (
           <span className="retro-strip-label">Audio Tone</span>
+        ) : variant === "retro-fm" ? (
+          <span className="retro-fm-strip-label">EQ</span>
         ) : (
           <span className="meta" style={{ alignSelf: "center", marginBottom: 0 }}>
             Audio:
@@ -599,13 +609,17 @@ export default function RadioPage() {
             key={option.mode}
             type="button"
             className={
-              retro
+              variant === "retro-am"
                 ? audioMode === option.mode
                   ? "retro-mode-button active"
                   : "retro-mode-button"
-                : audioMode === option.mode
-                  ? "primary"
-                  : undefined
+                : variant === "retro-fm"
+                  ? audioMode === option.mode
+                    ? "retro-fm-mode-button active"
+                    : "retro-fm-mode-button"
+                  : audioMode === option.mode
+                    ? "primary"
+                    : undefined
             }
             onClick={() => void onChangeAudioMode(option.mode)}
             disabled={audioModePending}
@@ -617,17 +631,23 @@ export default function RadioPage() {
     );
   }
 
-  const isRetroMode = uiMode === "RETRO_AM";
+  const isRetroAmMode = uiMode === "RETRO_AM";
+  const isRetroFmMode = uiMode === "RETRO_FM";
 
   if (!token) {
     return <section className="card">Checking auth...</section>;
   }
 
   return (
-    <div className={`grid radio-screen${isRetroMode ? " radio-screen-retro" : ""}`}>
-      <section className={`card ${isRetroMode ? "retro-tuner-card" : ""}`} style={{ gridColumn: "span 7" }}>
+    <div
+      className={`grid radio-screen${isRetroAmMode ? " radio-screen-retro radio-screen-retro-am" : ""}${isRetroFmMode ? " radio-screen-retro-fm" : ""}`}
+    >
+      <section
+        className={`card ${isRetroAmMode ? "retro-tuner-card" : ""}${isRetroFmMode ? " retro-fm-tuner-card" : ""}`}
+        style={{ gridColumn: "span 7" }}
+      >
         <div className="radio-screen-header">
-          <h2>{isRetroMode ? "AM Car Radio" : "Radio Tuner"}</h2>
+          <h2>{isRetroAmMode ? "AM Car Radio" : isRetroFmMode ? "FM Deck" : "Radio Tuner"}</h2>
           <div className="radio-ui-toggle" role="group" aria-label="Radio layout">
             <button
               type="button"
@@ -643,11 +663,18 @@ export default function RadioPage() {
             >
               Retro AM
             </button>
+            <button
+              type="button"
+              className={uiMode === "RETRO_FM" ? "primary" : undefined}
+              onClick={() => setUiMode("RETRO_FM")}
+            >
+              Retro FM
+            </button>
           </div>
         </div>
         {stations.length === 0 ? <p className="meta">No stations available. Generate channels first.</p> : null}
         {currentStation ? (
-          isRetroMode ? (
+          isRetroAmMode ? (
             <div className="retro-radio-shell">
               <div className="retro-faceplate">
                 <div className="retro-dial-window">
@@ -718,9 +745,86 @@ export default function RadioPage() {
                   </button>
                 </div>
 
-                {renderAudioModeButtons(true)}
+                {renderAudioModeButtons("retro-am")}
                 <p className="meta retro-help-text">
                   Clean = studio feed, FM = broadcast polish, AM = vintage narrow-band.
+                </p>
+              </div>
+            </div>
+          ) : isRetroFmMode ? (
+            <div className="retro-fm-shell">
+              <div className="retro-fm-faceplate">
+                <div className="retro-fm-display">
+                  <div className="retro-fm-band-row">
+                    <span className="retro-fm-band-pill">FM1</span>
+                    <span className="retro-fm-stereo-pill">STEREO</span>
+                  </div>
+                  <p className="retro-fm-frequency">{currentStation.frequencyLabel}</p>
+                  <p className="retro-fm-station">{currentStation.name}</p>
+                  <p className="retro-fm-state">{isScanning ? "Auto Scan Active" : "Preset Locked"}</p>
+                </div>
+
+                <div className="retro-fm-scale-wrap">
+                  <div className="retro-fm-scale-markers">
+                    <span>88</span>
+                    <span>92</span>
+                    <span>96</span>
+                    <span>100</span>
+                    <span>104</span>
+                    <span>108</span>
+                  </div>
+                  <input
+                    className="retro-fm-slider"
+                    type="range"
+                    min={0}
+                    max={Math.max(0, stations.length - 1)}
+                    value={currentIndex}
+                    onChange={(event) => {
+                      scheduleTune(Number(event.target.value), false);
+                    }}
+                    onMouseUp={() => scheduleTune(currentIndexRef.current, true)}
+                    onTouchEnd={() => scheduleTune(currentIndexRef.current, true)}
+                    disabled={stations.length === 0}
+                    aria-label="FM tuner dial"
+                  />
+                </div>
+
+                <div className="retro-fm-controls-row">
+                  <button
+                    type="button"
+                    className="retro-fm-button"
+                    onClick={() => {
+                      setIsScanning(false);
+                      void stepStation("PREV");
+                    }}
+                    disabled={stations.length === 0}
+                  >
+                    ◀ Seek
+                  </button>
+                  <button
+                    type="button"
+                    className="retro-fm-button"
+                    onClick={() => {
+                      setIsScanning(false);
+                      void stepStation("NEXT");
+                    }}
+                    disabled={stations.length === 0}
+                  >
+                    Seek ▶
+                  </button>
+                  <button
+                    type="button"
+                    className={isScanning ? "retro-fm-button active" : "retro-fm-button"}
+                    onClick={() => setIsScanning((value) => !value)}
+                    disabled={stations.length === 0}
+                  >
+                    {isScanning ? "Stop Scan" : "Scan"}
+                  </button>
+                </div>
+
+                {renderAudioModeButtons("retro-fm")}
+                <p className="meta retro-fm-help-text">
+                  Late-night FM deck mode with fast station surf and digital display styling.
                 </p>
               </div>
             </div>
@@ -732,7 +836,7 @@ export default function RadioPage() {
                 {isScanning ? <p className="meta">Scanning...</p> : null}
               </div>
 
-              {renderAudioModeButtons(false)}
+              {renderAudioModeButtons("default")}
               <p className="meta" style={{ marginBottom: "0.6rem" }}>
                 FM = mild radio coloration. AM = narrow-band vintage radio.
               </p>
@@ -786,10 +890,13 @@ export default function RadioPage() {
         ) : null}
       </section>
 
-      <section className={`card ${isRetroMode ? "retro-now-playing-card" : ""}`} style={{ gridColumn: "span 5" }}>
+      <section
+        className={`card ${isRetroAmMode ? "retro-now-playing-card" : ""}${isRetroFmMode ? " retro-fm-now-playing-card" : ""}`}
+        style={{ gridColumn: "span 5" }}
+      >
         <h2>Now Playing</h2>
         {currentStation ? (
-          <p className={isRetroMode ? "retro-station-line" : "meta"}>
+          <p className={isRetroAmMode ? "retro-station-line" : isRetroFmMode ? "retro-fm-station-line" : "meta"}>
             {currentStation.frequencyLabel} • {currentStation.name}
           </p>
         ) : null}
