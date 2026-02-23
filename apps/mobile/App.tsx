@@ -159,6 +159,7 @@ export default function App() {
   const [scanEnabled, setScanEnabled] = useState(false);
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [nextUp, setNextUp] = useState<Track[]>([]);
+  const [showNextUp, setShowNextUp] = useState(true);
   const [currentPlayback, setCurrentPlayback] = useState<PlaybackMeta | null>(null);
   const [audioMode, setAudioMode] = useState<AudioMode>("UNMODIFIED");
   const [audioModePending, setAudioModePending] = useState(false);
@@ -894,12 +895,19 @@ export default function App() {
                     <Text>Dislike</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={[styles.title, { marginTop: 12 }]}>Next Up</Text>
-                {nextUp.map((track) => (
-                  <Text key={track.navidromeSongId} style={styles.meta}>
-                    {track.title} ({track.artist})
-                  </Text>
-                ))}
+                <View style={styles.rowBetween}>
+                  <Text style={[styles.title, { marginBottom: 0 }]}>Next Up</Text>
+                  <TouchableOpacity style={styles.button} onPress={() => setShowNextUp((value) => !value)}>
+                    <Text>{showNextUp ? "Hide" : "Show"}</Text>
+                  </TouchableOpacity>
+                </View>
+                {showNextUp
+                  ? nextUp.map((track) => (
+                      <Text key={track.navidromeSongId} style={styles.meta}>
+                        {track.title} ({track.artist})
+                      </Text>
+                    ))
+                  : null}
               </>
             ) : (
               <Text style={styles.meta}>Choose a station and press Surf.</Text>
@@ -1046,6 +1054,13 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
     flexWrap: "wrap"
+  },
+  rowBetween: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    marginBottom: 8
   },
   trackTitle: {
     fontSize: 20,

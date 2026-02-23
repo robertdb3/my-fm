@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Track } from "@music-cable-box/shared";
 
 interface NowPlayingPanelProps {
@@ -21,6 +22,8 @@ export function NowPlayingPanel({
   onLike,
   onDislike
 }: NowPlayingPanelProps) {
+  const [showNextUp, setShowNextUp] = useState(true);
+
   return (
     <section className="card" style={{ gridColumn: "span 4" }}>
       <h2>Now Playing</h2>
@@ -51,14 +54,21 @@ export function NowPlayingPanel({
         <p className="meta">Select a station and press Surf to start continuous playback.</p>
       )}
 
-      <h3 style={{ marginTop: "1.2rem" }}>Next Up</h3>
-      <ol className="queue">
-        {nextUp.map((track, index) => (
-          <li key={`${track.navidromeSongId}-${index}`}>
-            {track.title} <span className="meta">({track.artist})</span>
-          </li>
-        ))}
-      </ol>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "1.2rem" }}>
+        <h3 style={{ margin: 0 }}>Next Up</h3>
+        <button type="button" onClick={() => setShowNextUp((value) => !value)}>
+          {showNextUp ? "Hide" : "Show"}
+        </button>
+      </div>
+      {showNextUp ? (
+        <ol className="queue">
+          {nextUp.map((track, index) => (
+            <li key={`${track.navidromeSongId}-${index}`}>
+              {track.title} <span className="meta">({track.artist})</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </section>
   );
 }

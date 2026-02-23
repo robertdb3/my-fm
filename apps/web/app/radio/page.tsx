@@ -63,6 +63,7 @@ export default function RadioPage() {
   const [currentPlayback, setCurrentPlayback] = useState<PlaybackMeta | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [showNextUp, setShowNextUp] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [audioMode, setAudioMode] = useState<AudioMode>("UNMODIFIED");
@@ -659,14 +660,21 @@ export default function RadioPage() {
           <p className="meta">Tune a station to begin playback.</p>
         )}
 
-        <h3>Next Up</h3>
-        <ol className="queue">
-          {nextUp.map((track, index) => (
-            <li key={`${track.navidromeSongId}-${index}`}>
-              {track.title} <span className="meta">({track.artist})</span>
-            </li>
-          ))}
-        </ol>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h3>Next Up</h3>
+          <button type="button" onClick={() => setShowNextUp((value) => !value)}>
+            {showNextUp ? "Hide" : "Show"}
+          </button>
+        </div>
+        {showNextUp ? (
+          <ol className="queue">
+            {nextUp.map((track, index) => (
+              <li key={`${track.navidromeSongId}-${index}`}>
+                {track.title} <span className="meta">({track.artist})</span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
 
         {status ? <p>{status}</p> : null}
         {error ? <p className="error">{error}</p> : null}
