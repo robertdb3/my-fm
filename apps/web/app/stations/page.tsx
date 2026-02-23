@@ -196,10 +196,6 @@ export default function StationsPage() {
     };
   }, [currentStartOffsetSec, nowPlaying]);
 
-  if (!token) {
-    return <section className="card">Checking auth...</section>;
-  }
-
   async function refreshStations() {
     const list = await getStations(token, {
       includeHidden: showHiddenStations
@@ -411,6 +407,10 @@ export default function StationsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update station visibility");
     }
+  }
+
+  if (!token) {
+    return <section className="card">Checking auth...</section>;
   }
 
   return (
