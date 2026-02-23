@@ -73,6 +73,7 @@ export default function RadioPage() {
   const [audioMode, setAudioMode] = useState<AudioMode>("UNMODIFIED");
   const [audioModePending, setAudioModePending] = useState(false);
   const [uiMode, setUiMode] = useState<RadioUiMode>("MODERN");
+  const [artworkLoadFailed, setArtworkLoadFailed] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const tuneTimeoutRef = useRef<number | null>(null);
@@ -173,6 +174,10 @@ export default function RadioPage() {
       // ignore storage write errors
     }
   }, [uiMode]);
+
+  useEffect(() => {
+    setArtworkLoadFailed(false);
+  }, [nowPlaying?.navidromeSongId, nowPlaying?.artworkUrl]);
 
   function beginSwitchRequest(): number {
     switchRequestIdRef.current += 1;
@@ -902,11 +907,27 @@ export default function RadioPage() {
         ) : null}
         {nowPlaying ? (
           <>
-            <h3>{nowPlaying.title}</h3>
-            <p className="meta">
-              {nowPlaying.artist}
-              {nowPlaying.album ? ` • ${nowPlaying.album}` : ""}
-            </p>
+            <div className="radio-now-playing-head">
+              {nowPlaying.artworkUrl && !artworkLoadFailed ? (
+                <img
+                  src={nowPlaying.artworkUrl}
+                  alt={`${nowPlaying.album ?? nowPlaying.title} cover art`}
+                  className="radio-album-art"
+                  onError={() => setArtworkLoadFailed(true)}
+                />
+              ) : (
+                <div className="radio-album-art radio-album-art-fallback" aria-hidden="true">
+                  ♫
+                </div>
+              )}
+              <div>
+                <h3>{nowPlaying.title}</h3>
+                <p className="meta">
+                  {nowPlaying.artist}
+                  {nowPlaying.album ? ` • ${nowPlaying.album}` : ""}
+                </p>
+              </div>
+            </div>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.7rem" }}>
               <button type="button" onClick={onTogglePlayPause}>
                 {isPlaying ? "Pause" : "Play"}

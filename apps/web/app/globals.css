@@ -267,6 +267,40 @@ p.error {
   margin-top: 0.7rem;
 }
 
+.radio-now-playing-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.radio-now-playing-head h3 {
+  margin: 0;
+}
+
+.radio-now-playing-head .meta {
+  margin: 0.24rem 0 0;
+}
+
+.radio-album-art {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid #d7d0c5;
+  background: #f1ece2;
+  box-shadow: 0 4px 12px rgba(14, 20, 28, 0.16);
+}
+
+.radio-album-art-fallback {
+  display: grid;
+  place-items: center;
+  color: #6f7c8a;
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+
 .radio-screen {
   align-items: start;
 }
@@ -550,6 +584,16 @@ p.error {
   color: #efd7b4;
 }
 
+.retro-now-playing-card .radio-album-art {
+  border-color: #6d4a2e;
+  background: #2a1c12;
+  box-shadow: 0 4px 12px rgba(12, 8, 5, 0.32);
+}
+
+.retro-now-playing-card .radio-album-art-fallback {
+  color: #dfb477;
+}
+
 .retro-now-playing-card p.error {
   color: #ffb5a5;
 }
@@ -791,6 +835,16 @@ p.error {
   color: #deebf6;
 }
 
+.retro-fm-now-playing-card .radio-album-art {
+  border-color: #3f5061;
+  background: #1a2632;
+  box-shadow: 0 4px 12px rgba(8, 13, 18, 0.34);
+}
+
+.retro-fm-now-playing-card .radio-album-art-fallback {
+  color: #8ec8ef;
+}
+
 .retro-fm-now-playing-card p.error {
   color: #ffbec0;
 }
@@ -826,5 +880,15 @@ p.error {
 
   .retro-fm-button {
     min-width: 6.2rem;
+  }
+
+  .radio-now-playing-head {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .radio-album-art {
+    width: 96px;
+    height: 96px;
   }
 }
