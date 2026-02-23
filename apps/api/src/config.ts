@@ -11,7 +11,11 @@ const EnvSchema = z.object({
   SUBSONIC_CLIENT_NAME: z.string().default("music-cable-box"),
   SUBSONIC_API_VERSION: z.string().default("1.16.1"),
   NAVIDROME_DEFAULT_URL: z.string().url().optional(),
-  FFMPEG_PATH: z.string().default("ffmpeg")
+  FFMPEG_PATH: z.string().default("ffmpeg"),
+  SCROBBLE_ENABLED: z.coerce.boolean().default(true),
+  SCROBBLE_MIN_LISTEN_SECONDS: z.coerce.number().int().min(1).max(600).default(30),
+  SCROBBLE_REQUIRED_PERCENT: z.coerce.number().min(0.1).max(1).default(0.5),
+  SCROBBLE_MAX_REQUIRED_SECONDS: z.coerce.number().int().min(30).max(1800).default(240)
 });
 
 export const env = EnvSchema.parse(process.env);

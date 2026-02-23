@@ -181,6 +181,26 @@ export class NavidromeClient {
     return response.song;
   }
 
+  async scrobble(
+    songId: string,
+    options?: {
+      submission?: boolean;
+      timeMs?: number;
+    }
+  ): Promise<void> {
+    const submission = options?.submission ?? true;
+    const timeMs =
+      options?.timeMs !== undefined && Number.isFinite(options.timeMs)
+        ? Math.max(0, Math.floor(options.timeMs))
+        : undefined;
+
+    await this.request("scrobble", {
+      id: songId,
+      submission,
+      ...(timeMs !== undefined ? { time: timeMs } : {})
+    });
+  }
+
   buildStreamUrl(songId: string, options?: { timeOffsetSec?: number }): string {
     const url = new URL(`${this.credentials.baseUrl}/rest/stream.view`);
     const normalizedOffset =

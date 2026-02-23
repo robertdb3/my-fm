@@ -23,6 +23,7 @@ import { advanceNextTrack, getStationPreviewCount, peekNextTracks } from "../ser
 import { regenerateSystemStations } from "../services/station-auto-generator";
 import { buildStreamProxyUrl } from "../services/stream-proxy";
 import { getUserAudioMode } from "../services/user-settings-service";
+import { sendNowPlayingScrobble, submitTrackScrobbleIfEligible } from "../services/scrobble-service";
 
 export const stationRoutes: FastifyPluginAsync = async (app) => {
   const parseBoolean = (value: string | undefined): boolean => value === "true" || value === "1";
@@ -209,6 +210,11 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           request,
           accessToken,
           offsetSec: result.playback.startOffsetSec
+        });
+        void sendNowPlayingScrobble({
+          userId: request.appUser.id,
+          navidromeSongId: result.track.navidromeSongId,
+          log: request.log
         });
         const proxiedNextUp = nextUp.map((track) =>
           toProxyTrack({
@@ -506,6 +512,11 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           accessToken,
           offsetSec: nowPlaying.playback.startOffsetSec
         });
+        void sendNowPlayingScrobble({
+          userId: request.appUser.id,
+          navidromeSongId: nowPlaying.track.navidromeSongId,
+          log: request.log
+        });
         const proxiedNextUp = nextUp.map((track) =>
           toProxyTrack({
             track,
@@ -555,6 +566,15 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       const payload = body ?? {};
 
       if (payload.previousTrackId) {
+        const listenSeconds = payload.listenSeconds ?? 0;
+        const startedAtMs = Date.now() - Math.max(0, Math.floor(listenSeconds)) * 1000;
+        void submitTrackScrobbleIfEligible({
+          userId: request.appUser.id,
+          navidromeSongId: payload.previousTrackId,
+          listenSeconds,
+          startedAtMs,
+          log: request.log
+        });
         await prisma.playEvent.create({
           data: {
             userId: request.appUser.id,
@@ -577,6 +597,11 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
         const track = await advanceNextTrack(station.id, request.appUser.id, {
           seed: payload.seed,
           reason: "next"
+        });
+        void sendNowPlayingScrobble({
+          userId: request.appUser.id,
+          navidromeSongId: track.track.navidromeSongId,
+          log: request.log
         });
         const proxiedTrack = toProxyTrack({
           track: track.track,

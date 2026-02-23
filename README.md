@@ -68,6 +68,9 @@ packages/
 - Track feedback: like/dislike
 - Play history endpoint
 - Guide view: peek next tracks without advancing station state
+- Navidrome-backed Last.fm scrobbling:
+  - now-playing update on track start
+  - submission scrobble on track change when listen time threshold is met
 
 ## Security Model (MVP)
 
@@ -102,6 +105,11 @@ cp apps/mobile/.env.example apps/mobile/.env
 - `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD`
 - optional Subsonic client metadata
 - optional `FFMPEG_PATH` if ffmpeg binary is not available as `ffmpeg`
+- optional scrobble tuning:
+  - `SCROBBLE_ENABLED`
+  - `SCROBBLE_MIN_LISTEN_SECONDS`
+  - `SCROBBLE_REQUIRED_PERCENT`
+  - `SCROBBLE_MAX_REQUIRED_SECONDS`
 
 3. Edit `apps/web/.env` and `apps/mobile/.env` API URL values if needed.
 
@@ -248,6 +256,16 @@ Performance notes:
 - Candidate pool is bounded and never loads full-library rows into memory.
 - Track/play-feedback lookups are scoped to candidate IDs only.
 - Short-lived per-station candidate cache reduces repeated SQL work under rapid skip/surf traffic.
+
+Scrobbling behavior:
+
+- The app calls Navidrome's Subsonic `scrobble` endpoint.
+- If you connected Last.fm inside Navidrome, Navidrome forwards these events to Last.fm.
+- On track start (`/play`, `/next`, tuner step): app sends now-playing (`submission=false`).
+- On track change (`/next` with `previousTrackId` + `listenSeconds`): app submits scrobble (`submission=true`) when threshold passes.
+- Threshold defaults mirror common scrobble rules:
+  - minimum listen: `30s`
+  - required listen: max(`30s`, min(`50%` of track, `240s`))
 
 ## Auto-Generated Stations
 
