@@ -13,7 +13,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link href="/stations">Stations</Link>
             <Link href="/radio">Radio</Link>
             <Link href="/settings">Settings</Link>
-            <Link href="/guide">Guide</Link>
             <LogoutButton />
           </nav>
         </header>
