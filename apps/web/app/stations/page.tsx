@@ -75,15 +75,8 @@ export default function StationsPage() {
     audioRef.current = new Audio();
     const audio = audioRef.current;
 
-    const onEnded = () => {
-      setIsPlaying(false);
-    };
-
-    audio.addEventListener("ended", onEnded);
-
     return () => {
       audio.pause();
-      audio.removeEventListener("ended", onEnded);
       audioRef.current = null;
     };
   }, []);
@@ -289,10 +282,12 @@ export default function StationsPage() {
     }
   }
 
-  async function nextTrack() {
+  async function nextTrack(options?: { skipped?: boolean }) {
     if (!currentStationId) {
       return;
     }
+
+    const skipped = options?.skipped ?? true;
 
     try {
       const listenedSeconds = Math.floor(audioRef.current?.currentTime ?? 0);
@@ -302,7 +297,7 @@ export default function StationsPage() {
         nextStationTrack(currentStationId, token, {
           previousTrackId,
           listenSeconds: listenedSeconds,
-          skipped: true
+          skipped
         }),
         peekStation(currentStationId, 10, token)
       ]);
@@ -314,6 +309,25 @@ export default function StationsPage() {
       setError(err instanceof Error ? err.message : "Failed to load next track");
     }
   }
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    const onEnded = () => {
+      setIsPlaying(false);
+      void nextTrack({
+        skipped: false
+      });
+    };
+
+    audio.addEventListener("ended", onEnded);
+    return () => {
+      audio.removeEventListener("ended", onEnded);
+    };
+  }, [currentStationId, currentStartOffsetSec, nowPlaying?.navidromeSongId, token]);
 
   function togglePlayPause() {
     const audio = audioRef.current;

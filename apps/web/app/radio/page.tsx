@@ -89,8 +89,6 @@ export default function RadioPage() {
   useEffect(() => {
     audioRef.current = new Audio();
     const audio = audioRef.current;
-    const onEnded = () => setIsPlaying(false);
-    audio.addEventListener("ended", onEnded);
 
     return () => {
       if (tuneTimeoutRef.current !== null) {
@@ -100,7 +98,6 @@ export default function RadioPage() {
         window.clearInterval(scanIntervalRef.current);
       }
       audio.pause();
-      audio.removeEventListener("ended", onEnded);
       audioRef.current = null;
     };
   }, []);
@@ -398,12 +395,15 @@ export default function RadioPage() {
     };
   }, [isScanning, stations.length, token]);
 
-  async function onNextTrack() {
+  async function onNextTrack(options?: { skipped?: boolean; stopScan?: boolean }) {
     if (!currentStationId) {
       return;
     }
 
-    if (isScanning) {
+    const skipped = options?.skipped ?? true;
+    const stopScan = options?.stopScan ?? true;
+
+    if (stopScan && isScanning) {
       setIsScanning(false);
     }
 
@@ -414,7 +414,7 @@ export default function RadioPage() {
         nextStationTrack(currentStationId, token, {
           previousTrackId: nowPlaying?.navidromeSongId,
           listenSeconds,
-          skipped: true,
+          skipped,
           previousStartOffsetSec: currentPlayback?.startOffsetSec ?? 0,
           previousReason: currentPlayback?.reason
         }),
@@ -436,6 +436,26 @@ export default function RadioPage() {
       setError(err instanceof Error ? err.message : "Failed to skip track");
     }
   }
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    const onEnded = () => {
+      setIsPlaying(false);
+      void onNextTrack({
+        skipped: false,
+        stopScan: false
+      });
+    };
+
+    audio.addEventListener("ended", onEnded);
+    return () => {
+      audio.removeEventListener("ended", onEnded);
+    };
+  }, [currentPlayback?.reason, currentPlayback?.startOffsetSec, currentStationId, isScanning, nowPlaying?.navidromeSongId, token]);
 
   function onTogglePlayPause() {
     const audio = audioRef.current;
@@ -645,7 +665,7 @@ export default function RadioPage() {
               <button type="button" onClick={onTogglePlayPause}>
                 {isPlaying ? "Pause" : "Play"}
               </button>
-              <button type="button" className="primary" onClick={onNextTrack}>
+              <button type="button" className="primary" onClick={() => void onNextTrack()}>
                 Next / Skip
               </button>
               <button type="button" onClick={() => onFeedback(true)}>

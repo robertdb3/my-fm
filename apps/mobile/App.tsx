@@ -173,8 +173,12 @@ export default function App() {
   const tuneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const switchRequestIdRef = useRef(0);
+  const tokenRef = useRef<string | null>(null);
   const currentTunerIndexRef = useRef(0);
   const currentStationIdRef = useRef<string | null>(null);
+  const nowPlayingRef = useRef<Track | null>(null);
+  const currentPlaybackRef = useRef<PlaybackMeta | null>(null);
+  const scanEnabledRef = useRef(false);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -250,6 +254,22 @@ export default function App() {
   useEffect(() => {
     currentStationIdRef.current = currentStationId;
   }, [currentStationId]);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  useEffect(() => {
+    nowPlayingRef.current = nowPlaying;
+  }, [nowPlaying]);
+
+  useEffect(() => {
+    currentPlaybackRef.current = currentPlayback;
+  }, [currentPlayback]);
+
+  useEffect(() => {
+    scanEnabledRef.current = scanEnabled;
+  }, [scanEnabled]);
 
   useEffect(() => {
     soundRef.current = sound;
@@ -342,6 +362,23 @@ export default function App() {
       });
       return;
     }
+
+    let finishedHandled = false;
+    createdSound.setOnPlaybackStatusUpdate((playbackStatus) => {
+      if (!isLatestSwitchRequest(requestId) || !playbackStatus.isLoaded) {
+        return;
+      }
+
+      setIsPlaying(playbackStatus.isPlaying);
+
+      if (playbackStatus.didJustFinish && !finishedHandled) {
+        finishedHandled = true;
+        void onNext({
+          skipped: false,
+          stopScan: false
+        });
+      }
+    });
 
     let started = false;
     if (shouldAutoPlay) {
@@ -550,12 +587,16 @@ export default function App() {
     void stepStation(delta >= 0 ? "NEXT" : "PREV");
   }
 
-  async function onNext() {
-    if (!token || !currentStationId) {
+  async function onNext(options?: { skipped?: boolean; stopScan?: boolean }) {
+    const activeToken = tokenRef.current;
+    const stationId = currentStationIdRef.current;
+    if (!activeToken || !stationId) {
       return;
     }
 
-    if (scanEnabled) {
+    const skipped = options?.skipped ?? true;
+    const stopScan = options?.stopScan ?? true;
+    if (stopScan && scanEnabledRef.current) {
       setScanEnabled(false);
     }
 
@@ -570,14 +611,14 @@ export default function App() {
 
       const requestId = beginSwitchRequest();
       const [nextResponse, peekResponse] = await Promise.all([
-        nextTrack(currentStationId, token, {
-          previousTrackId: nowPlaying?.navidromeSongId,
+        nextTrack(stationId, activeToken, {
+          previousTrackId: nowPlayingRef.current?.navidromeSongId,
           listenSeconds,
-          skipped: true,
-          previousStartOffsetSec: currentPlayback?.startOffsetSec ?? 0,
-          previousReason: currentPlayback?.reason
+          skipped,
+          previousStartOffsetSec: currentPlaybackRef.current?.startOffsetSec ?? 0,
+          previousReason: currentPlaybackRef.current?.reason
         }),
-        peekStation(currentStationId, token)
+        peekStation(stationId, activeToken)
       ]);
       if (!isLatestSwitchRequest(requestId)) {
         return;
@@ -883,7 +924,7 @@ export default function App() {
                   <TouchableOpacity style={styles.button} onPress={onTogglePlayPause}>
                     <Text>{isPlaying ? "Pause" : "Play"}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.button, styles.primary]} onPress={onNext}>
+                  <TouchableOpacity style={[styles.button, styles.primary]} onPress={() => void onNext()}>
                     <Text style={styles.primaryLabel}>Next</Text>
                   </TouchableOpacity>
                 </View>
