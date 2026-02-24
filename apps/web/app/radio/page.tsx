@@ -691,10 +691,14 @@ export default function RadioPage() {
           isCarMode ? (
             <div className="car-radio-shell">
               <aside className="car-rail car-rail-left" aria-label="Left controls">
-                <p className="car-rail-label">Volume</p>
-                <div className="car-knob" />
+                <p className="car-rail-label">PWR/VOL</p>
+                <div className="car-knob-wrap">
+                  <span className="car-knob-mark car-knob-mark-top">+</span>
+                  <div className="car-knob" />
+                  <span className="car-knob-mark car-knob-mark-bottom">-</span>
+                </div>
                 <button type="button" className="car-rail-btn is-active">
-                  Home
+                  ⌂
                 </button>
                 <button
                   type="button"
@@ -714,7 +718,10 @@ export default function RadioPage() {
 
               <div className="car-center-console">
                 <div className="car-top-strip">
-                  <div className="car-breadcrumb">⌂ Radio &gt; {audioMode === "AM" ? "AM" : "FM"}</div>
+                  <div className="car-breadcrumb">
+                    <span className="car-home-icon">⌂</span>
+                    <span>Radio &gt; {audioMode === "AM" ? "AM" : "FM"}</span>
+                  </div>
                   <div className="car-mode-chip">{audioMode === "AM" ? "AM" : "FM"}</div>
                 </div>
 
@@ -747,10 +754,10 @@ export default function RadioPage() {
 
                   <div className="car-station-panel">
                     <p className="car-frequency-readout">{currentStation.frequencyLabel}</p>
-                    <p className="car-metadata-line">{nowPlaying?.artist ?? currentStation.name}</p>
-                    <p className="car-metadata-line">{nowPlaying?.album ?? "Live Radio"}</p>
+                    <p className="car-metadata-line car-meta-with-icon">♪ {nowPlaying?.artist ?? currentStation.name}</p>
+                    <p className="car-metadata-line car-meta-with-icon">◉ {nowPlaying?.album ?? "Live Radio"}</p>
                     <p className="car-metadata-line car-metadata-strong">
-                      {nowPlaying?.title ?? `${currentStation.name} • ${currentStation.frequencyLabel}`}
+                      ■ {nowPlaying?.title ?? `${currentStation.name} • ${currentStation.frequencyLabel}`}
                     </p>
 
                     <input
@@ -793,7 +800,8 @@ export default function RadioPage() {
                       className="car-softkey-btn"
                       onClick={() => setStatus("HD Radio toggle is not available in MVP yet.")}
                     >
-                      HD Radio Off
+                      HD Radio
+                      <span className="car-softkey-sub">Off</span>
                     </button>
                     <button
                       type="button"
@@ -826,7 +834,7 @@ export default function RadioPage() {
                       >
                         <span className="car-preset-slot">{index + 1}</span>
                         <span className="car-preset-main">{preset ? preset.frequencyLabel : "Hold"}</span>
-                        <span className="car-preset-sub">{preset ? (audioMode === "AM" ? "AM" : "FM") : "Preset"}</span>
+                        <span className="car-preset-sub">{preset ? (audioMode === "AM" ? "AM" : "FM") : "Empty"}</span>
                       </button>
                     );
                   })}
@@ -846,8 +854,12 @@ export default function RadioPage() {
               </div>
 
               <aside className="car-rail car-rail-right" aria-label="Right controls">
-                <p className="car-rail-label">Tune Scroll</p>
-                <div className="car-knob" />
+                <p className="car-rail-label">TUNE/SCROLL</p>
+                <div className="car-knob-wrap">
+                  <span className="car-knob-mark car-knob-mark-top">+</span>
+                  <div className="car-knob" />
+                  <span className="car-knob-mark car-knob-mark-bottom">-</span>
+                </div>
                 <button type="button" className="car-rail-btn is-active">
                   Radio
                 </button>
