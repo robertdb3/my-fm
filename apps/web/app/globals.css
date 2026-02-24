@@ -362,6 +362,328 @@ p.error {
   border-radius: 22px;
 }
 
+.radio-screen-car {
+  position: relative;
+}
+
+.radio-screen-car::before {
+  content: "";
+  position: absolute;
+  inset: -1rem -0.9rem;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(99, 117, 150, 0.14), transparent 34%),
+    radial-gradient(circle at 82% 72%, rgba(58, 89, 133, 0.14), transparent 40%),
+    linear-gradient(160deg, #0b0f14 0%, #121821 44%, #0a0e13 100%);
+  z-index: -1;
+  border-radius: 18px;
+}
+
+.car-tuner-card {
+  border: 1px solid #273141;
+  background: linear-gradient(180deg, #141c27 0%, #101720 100%);
+  color: #deecfb;
+  box-shadow:
+    inset 0 0 0 1px rgba(116, 152, 198, 0.16),
+    0 18px 36px rgba(6, 10, 16, 0.45);
+}
+
+.car-tuner-card .radio-screen-header h2 {
+  color: #d3e7fb;
+}
+
+.car-tuner-card .radio-ui-toggle button {
+  border-color: #405067;
+  background: rgba(20, 28, 39, 0.85);
+  color: #d0e3f6;
+}
+
+.car-tuner-card .radio-ui-toggle button.primary {
+  border-color: #4f9ce1;
+  background: linear-gradient(180deg, #7cb7e8 0%, #4b84b7 100%);
+  color: #081017;
+}
+
+.car-radio-shell {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 130px;
+  gap: 0.75rem;
+}
+
+.car-rail {
+  border: 1px solid #1d2530;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0a0f15 0%, #090d13 100%);
+  padding: 0.62rem 0.55rem;
+  display: grid;
+  align-content: start;
+  gap: 0.52rem;
+}
+
+.car-rail-label {
+  margin: 0;
+  color: #d2e4f7;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.66rem;
+  text-align: center;
+}
+
+.car-knob {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 0.2rem;
+  border-radius: 50%;
+  border: 2px solid #aebfce;
+  background:
+    radial-gradient(circle at 28% 25%, rgba(230, 244, 255, 0.2), transparent 35%),
+    radial-gradient(circle at 65% 68%, rgba(8, 15, 23, 0.9), rgba(5, 8, 13, 0.97));
+  box-shadow:
+    inset 0 0 0 2px rgba(174, 194, 211, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.car-rail-btn {
+  border: 1px solid #2f3b4d;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #111924 0%, #0b1118 100%);
+  color: #cfe3f8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.73rem;
+  padding: 0.48rem 0.46rem;
+}
+
+.car-rail-btn.is-active {
+  border-color: #4a8bc2;
+  box-shadow: inset 0 -2px 0 #4a8bc2;
+}
+
+.car-center-console {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.car-top-strip {
+  border: 1px solid #2f3d51;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(21, 30, 43, 0.95) 0%, rgba(16, 24, 35, 0.95) 100%);
+  padding: 0.45rem 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.car-breadcrumb {
+  color: #d2e6fa;
+  font-size: 0.96rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.car-mode-chip {
+  border: 1px solid #486489;
+  border-radius: 7px;
+  padding: 0.16rem 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  background: rgba(18, 33, 49, 0.72);
+  color: #d8ecff;
+}
+
+.car-main-screen {
+  border: 1px solid #29364a;
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 170px;
+  min-height: 245px;
+}
+
+.car-band-stack {
+  background: linear-gradient(180deg, #1a2535 0%, #121a26 100%);
+  border-right: 1px solid #31445f;
+  display: grid;
+  align-content: start;
+}
+
+.car-band-btn {
+  border: 0;
+  border-bottom: 1px solid #2f3d50;
+  border-radius: 0;
+  background: linear-gradient(180deg, #1b2739 0%, #121b28 100%);
+  color: #cde2f6;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 700;
+  height: 58px;
+}
+
+.car-band-btn.active {
+  background: linear-gradient(180deg, #4f96d0 0%, #3575ab 100%);
+  color: #08111a;
+}
+
+.car-station-panel {
+  background:
+    radial-gradient(circle at 30% 24%, rgba(111, 151, 255, 0.22), transparent 34%),
+    radial-gradient(circle at 70% 58%, rgba(120, 166, 255, 0.18), transparent 42%),
+    linear-gradient(180deg, #0f1730 0%, #12172a 100%);
+  padding: 0.85rem 0.95rem;
+  position: relative;
+}
+
+.car-station-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 16% 22%, rgba(210, 233, 255, 0.75) 0, rgba(210, 233, 255, 0) 2px),
+    radial-gradient(circle at 32% 44%, rgba(210, 233, 255, 0.58) 0, rgba(210, 233, 255, 0) 1.7px),
+    radial-gradient(circle at 58% 31%, rgba(210, 233, 255, 0.62) 0, rgba(210, 233, 255, 0) 1.8px),
+    radial-gradient(circle at 77% 62%, rgba(210, 233, 255, 0.5) 0, rgba(210, 233, 255, 0) 1.6px),
+    radial-gradient(circle at 88% 39%, rgba(210, 233, 255, 0.45) 0, rgba(210, 233, 255, 0) 1.5px);
+  opacity: 0.5;
+}
+
+.car-frequency-readout {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 0.3rem;
+  font-size: clamp(2.5rem, 4.8vw, 3.5rem);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #d8ecff;
+}
+
+.car-metadata-line {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 0.24rem;
+  color: #d4e8ff;
+  font-size: 1.12rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.94;
+}
+
+.car-metadata-strong {
+  margin-top: 0.42rem;
+  font-size: 1.04rem;
+  font-weight: 700;
+}
+
+.car-tuner-slider {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin-top: 0.72rem;
+  accent-color: #63ace7;
+}
+
+.car-softkey-column {
+  background: linear-gradient(180deg, #141e2b 0%, #101822 100%);
+  border-left: 1px solid #2f425f;
+  padding: 0.72rem;
+  display: grid;
+  align-content: start;
+  gap: 0.52rem;
+}
+
+.car-softkey-btn {
+  border: 1px solid #425473;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #29354a 0%, #1f2a3d 100%);
+  color: #dbeefe;
+  min-height: 48px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.car-softkey-btn:hover {
+  border-color: #6a9ece;
+}
+
+.car-preset-row {
+  border: 1px solid #2f3e53;
+  border-radius: 8px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) 70px;
+  background: linear-gradient(180deg, #141d2a 0%, #0e1520 100%);
+}
+
+.car-preset-btn {
+  border: 0;
+  border-right: 1px solid #2f3e52;
+  border-radius: 0;
+  background: linear-gradient(180deg, #1a2534 0%, #141d2a 100%);
+  color: #cde3f8;
+  min-height: 90px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.1rem;
+}
+
+.car-preset-btn:disabled {
+  opacity: 0.72;
+}
+
+.car-preset-btn.active {
+  background: linear-gradient(180deg, #2f7fbd 0%, #25669a 100%);
+  color: #ecf7ff;
+}
+
+.car-preset-slot {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  opacity: 0.86;
+}
+
+.car-preset-main {
+  font-size: 1.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.car-preset-sub {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.car-preset-next {
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(180deg, #252f3f 0%, #1a2230 100%);
+  color: #e2f2ff;
+  font-size: 2.4rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.car-console-messages {
+  grid-column: 1 / -1;
+}
+
+.car-console-status {
+  margin: 0.25rem 0 0;
+  color: #c5ddf3;
+  font-size: 0.88rem;
+}
+
+.car-console-error {
+  margin: 0.22rem 0 0;
+  font-size: 0.9rem;
+}
+
 .retro-tuner-card {
   border: 1px solid #4e3323;
   background:
@@ -880,6 +1202,60 @@ p.error {
 
   .retro-fm-button {
     min-width: 6.2rem;
+  }
+
+  .car-radio-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .car-rail {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .car-knob {
+    width: 52px;
+    height: 52px;
+    margin: 0;
+  }
+
+  .car-rail-label {
+    text-align: left;
+    grid-column: 1 / -1;
+  }
+
+  .car-main-screen {
+    grid-template-columns: 1fr;
+  }
+
+  .car-band-stack {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: grid;
+    border-right: 0;
+    border-bottom: 1px solid #31445f;
+  }
+
+  .car-band-btn {
+    height: 46px;
+    border-bottom: 0;
+    border-right: 1px solid #2f3d50;
+  }
+
+  .car-softkey-column {
+    border-left: 0;
+    border-top: 1px solid #2f425f;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: grid;
+  }
+
+  .car-preset-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .car-preset-next {
+    grid-column: span 3;
+    min-height: 58px;
   }
 
   .radio-now-playing-head {

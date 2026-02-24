@@ -21,7 +21,7 @@ interface PlaybackMeta {
   reason: string;
 }
 
-type RadioUiMode = "MODERN" | "RETRO_AM" | "RETRO_FM";
+type RadioUiMode = "MODERN" | "RETRO_AM" | "RETRO_FM" | "CAR";
 
 const RADIO_UI_MODE_STORAGE_KEY = "music-cable-box.radio.ui-mode";
 
@@ -83,6 +83,7 @@ export default function RadioPage() {
   const switchRequestIdRef = useRef(0);
 
   const currentStation = useMemo(() => stations[currentIndex] ?? null, [currentIndex, stations]);
+  const carPresetStations = useMemo(() => stations.slice(0, 6), [stations]);
 
   useEffect(() => {
     currentIndexRef.current = currentIndex;
@@ -159,7 +160,7 @@ export default function RadioPage() {
   useEffect(() => {
     try {
       const storedValue = window.localStorage.getItem(RADIO_UI_MODE_STORAGE_KEY);
-      if (storedValue === "MODERN" || storedValue === "RETRO_AM" || storedValue === "RETRO_FM") {
+      if (storedValue === "MODERN" || storedValue === "RETRO_AM" || storedValue === "RETRO_FM" || storedValue === "CAR") {
         setUiMode(storedValue);
       }
     } catch {
@@ -638,6 +639,7 @@ export default function RadioPage() {
 
   const isRetroAmMode = uiMode === "RETRO_AM";
   const isRetroFmMode = uiMode === "RETRO_FM";
+  const isCarMode = uiMode === "CAR";
 
   if (!token) {
     return <section className="card">Checking auth...</section>;
@@ -645,14 +647,14 @@ export default function RadioPage() {
 
   return (
     <div
-      className={`grid radio-screen${isRetroAmMode ? " radio-screen-retro radio-screen-retro-am" : ""}${isRetroFmMode ? " radio-screen-retro-fm" : ""}`}
+      className={`grid radio-screen${isRetroAmMode ? " radio-screen-retro radio-screen-retro-am" : ""}${isRetroFmMode ? " radio-screen-retro-fm" : ""}${isCarMode ? " radio-screen-car" : ""}`}
     >
       <section
-        className={`card ${isRetroAmMode ? "retro-tuner-card" : ""}${isRetroFmMode ? " retro-fm-tuner-card" : ""}`}
-        style={{ gridColumn: "span 7" }}
+        className={`card ${isRetroAmMode ? "retro-tuner-card" : ""}${isRetroFmMode ? " retro-fm-tuner-card" : ""}${isCarMode ? " car-tuner-card" : ""}`}
+        style={{ gridColumn: isCarMode ? "span 12" : "span 7" }}
       >
         <div className="radio-screen-header">
-          <h2>{isRetroAmMode ? "AM Car Radio" : isRetroFmMode ? "FM Deck" : "Radio Tuner"}</h2>
+          <h2>{isRetroAmMode ? "AM Car Radio" : isRetroFmMode ? "FM Deck" : isCarMode ? "Car UI" : "Radio Tuner"}</h2>
           <div className="radio-ui-toggle" role="group" aria-label="Radio layout">
             <button
               type="button"
@@ -675,11 +677,210 @@ export default function RadioPage() {
             >
               Retro FM
             </button>
+            <button
+              type="button"
+              className={uiMode === "CAR" ? "primary" : undefined}
+              onClick={() => setUiMode("CAR")}
+            >
+              Car
+            </button>
           </div>
         </div>
         {stations.length === 0 ? <p className="meta">No stations available. Generate channels first.</p> : null}
         {currentStation ? (
-          isRetroAmMode ? (
+          isCarMode ? (
+            <div className="car-radio-shell">
+              <aside className="car-rail car-rail-left" aria-label="Left controls">
+                <p className="car-rail-label">Volume</p>
+                <div className="car-knob" />
+                <button type="button" className="car-rail-btn is-active">
+                  Home
+                </button>
+                <button
+                  type="button"
+                  className="car-rail-btn"
+                  onClick={() => setStatus("Map integration is not available in MVP yet.")}
+                >
+                  Map
+                </button>
+                <button
+                  type="button"
+                  className="car-rail-btn"
+                  onClick={() => setStatus("Apps integration is not available in MVP yet.")}
+                >
+                  Apps
+                </button>
+              </aside>
+
+              <div className="car-center-console">
+                <div className="car-top-strip">
+                  <div className="car-breadcrumb">⌂ Radio &gt; {audioMode === "AM" ? "AM" : "FM"}</div>
+                  <div className="car-mode-chip">{audioMode === "AM" ? "AM" : "FM"}</div>
+                </div>
+
+                <div className="car-main-screen">
+                  <div className="car-band-stack">
+                    <button
+                      type="button"
+                      className={audioMode === "FM" ? "car-band-btn active" : "car-band-btn"}
+                      onClick={() => void onChangeAudioMode("FM")}
+                      disabled={audioModePending}
+                    >
+                      FM
+                    </button>
+                    <button
+                      type="button"
+                      className={audioMode === "AM" ? "car-band-btn active" : "car-band-btn"}
+                      onClick={() => void onChangeAudioMode("AM")}
+                      disabled={audioModePending}
+                    >
+                      AM
+                    </button>
+                    <button
+                      type="button"
+                      className="car-band-btn"
+                      onClick={() => setStatus("SXM is not available in MVP yet.")}
+                    >
+                      SXM
+                    </button>
+                  </div>
+
+                  <div className="car-station-panel">
+                    <p className="car-frequency-readout">{currentStation.frequencyLabel}</p>
+                    <p className="car-metadata-line">{nowPlaying?.artist ?? currentStation.name}</p>
+                    <p className="car-metadata-line">{nowPlaying?.album ?? "Live Radio"}</p>
+                    <p className="car-metadata-line car-metadata-strong">
+                      {nowPlaying?.title ?? `${currentStation.name} • ${currentStation.frequencyLabel}`}
+                    </p>
+
+                    <input
+                      className="car-tuner-slider"
+                      type="range"
+                      min={0}
+                      max={Math.max(0, stations.length - 1)}
+                      value={currentIndex}
+                      onChange={(event) => {
+                        scheduleTune(Number(event.target.value), false);
+                      }}
+                      onMouseUp={() => scheduleTune(currentIndexRef.current, true)}
+                      onTouchEnd={() => scheduleTune(currentIndexRef.current, true)}
+                      disabled={stations.length === 0}
+                      aria-label="Car tuner slider"
+                    />
+                  </div>
+
+                  <div className="car-softkey-column">
+                    <button
+                      type="button"
+                      className="car-softkey-btn"
+                      onClick={() => {
+                        setIsScanning(false);
+                        void stepStation("NEXT");
+                      }}
+                      disabled={stations.length === 0}
+                    >
+                      Scan
+                    </button>
+                    <button
+                      type="button"
+                      className="car-softkey-btn"
+                      onClick={() => setStatus("Replay is not available in MVP yet.")}
+                    >
+                      Replay
+                    </button>
+                    <button
+                      type="button"
+                      className="car-softkey-btn"
+                      onClick={() => setStatus("HD Radio toggle is not available in MVP yet.")}
+                    >
+                      HD Radio Off
+                    </button>
+                    <button
+                      type="button"
+                      className="car-softkey-btn"
+                      onClick={onTogglePlayPause}
+                    >
+                      {isPlaying ? "Pause" : "Play"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="car-preset-row">
+                  {Array.from({ length: 6 }).map((_, index) => {
+                    const preset = carPresetStations[index] ?? null;
+                    const isActivePreset = preset?.id === currentStation.id;
+                    return (
+                      <button
+                        key={preset?.id ?? `empty-${index}`}
+                        type="button"
+                        className={isActivePreset ? "car-preset-btn active" : "car-preset-btn"}
+                        onClick={() => {
+                          if (!preset) {
+                            setStatus("Preset slot is empty.");
+                            return;
+                          }
+                          setIsScanning(false);
+                          scheduleTune(preset.tunerIndex, true);
+                        }}
+                        disabled={!preset}
+                      >
+                        <span className="car-preset-slot">{index + 1}</span>
+                        <span className="car-preset-main">{preset ? preset.frequencyLabel : "Hold"}</span>
+                        <span className="car-preset-sub">{preset ? (audioMode === "AM" ? "AM" : "FM") : "Preset"}</span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="car-preset-next"
+                    onClick={() => {
+                      setIsScanning(false);
+                      void stepStation("NEXT");
+                    }}
+                    disabled={stations.length === 0}
+                    aria-label="Next station"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+
+              <aside className="car-rail car-rail-right" aria-label="Right controls">
+                <p className="car-rail-label">Tune Scroll</p>
+                <div className="car-knob" />
+                <button type="button" className="car-rail-btn is-active">
+                  Radio
+                </button>
+                <button
+                  type="button"
+                  className="car-rail-btn"
+                  onClick={() => {
+                    setIsScanning(false);
+                    void stepStation("PREV");
+                  }}
+                  disabled={stations.length === 0}
+                >
+                  ◀◀
+                </button>
+                <button
+                  type="button"
+                  className="car-rail-btn"
+                  onClick={() => {
+                    setIsScanning(false);
+                    void stepStation("NEXT");
+                  }}
+                  disabled={stations.length === 0}
+                >
+                  ▶▶
+                </button>
+              </aside>
+
+              <div className="car-console-messages">
+                {status ? <p className="car-console-status">{status}</p> : null}
+                {error ? <p className="error car-console-error">{error}</p> : null}
+              </div>
+            </div>
+          ) : isRetroAmMode ? (
             <div className="retro-radio-shell">
               <div className="retro-faceplate">
                 <div className="retro-dial-window">
@@ -895,77 +1096,79 @@ export default function RadioPage() {
         ) : null}
       </section>
 
-      <section
-        className={`card ${isRetroAmMode ? "retro-now-playing-card" : ""}${isRetroFmMode ? " retro-fm-now-playing-card" : ""}`}
-        style={{ gridColumn: "span 5" }}
-      >
-        <h2>Now Playing</h2>
-        {currentStation ? (
-          <p className={isRetroAmMode ? "retro-station-line" : isRetroFmMode ? "retro-fm-station-line" : "meta"}>
-            {currentStation.frequencyLabel} • {currentStation.name}
-          </p>
-        ) : null}
-        {nowPlaying ? (
-          <>
-            <div className="radio-now-playing-head">
-              {nowPlaying.artworkUrl && !artworkLoadFailed ? (
-                <img
-                  src={nowPlaying.artworkUrl}
-                  alt={`${nowPlaying.album ?? nowPlaying.title} cover art`}
-                  className="radio-album-art"
-                  onError={() => setArtworkLoadFailed(true)}
-                />
-              ) : (
-                <div className="radio-album-art radio-album-art-fallback" aria-hidden="true">
-                  ♫
+      {!isCarMode ? (
+        <section
+          className={`card ${isRetroAmMode ? "retro-now-playing-card" : ""}${isRetroFmMode ? " retro-fm-now-playing-card" : ""}`}
+          style={{ gridColumn: "span 5" }}
+        >
+          <h2>Now Playing</h2>
+          {currentStation ? (
+            <p className={isRetroAmMode ? "retro-station-line" : isRetroFmMode ? "retro-fm-station-line" : "meta"}>
+              {currentStation.frequencyLabel} • {currentStation.name}
+            </p>
+          ) : null}
+          {nowPlaying ? (
+            <>
+              <div className="radio-now-playing-head">
+                {nowPlaying.artworkUrl && !artworkLoadFailed ? (
+                  <img
+                    src={nowPlaying.artworkUrl}
+                    alt={`${nowPlaying.album ?? nowPlaying.title} cover art`}
+                    className="radio-album-art"
+                    onError={() => setArtworkLoadFailed(true)}
+                  />
+                ) : (
+                  <div className="radio-album-art radio-album-art-fallback" aria-hidden="true">
+                    ♫
+                  </div>
+                )}
+                <div>
+                  <h3>{nowPlaying.title}</h3>
+                  <p className="meta">
+                    {nowPlaying.artist}
+                    {nowPlaying.album ? ` • ${nowPlaying.album}` : ""}
+                  </p>
                 </div>
-              )}
-              <div>
-                <h3>{nowPlaying.title}</h3>
-                <p className="meta">
-                  {nowPlaying.artist}
-                  {nowPlaying.album ? ` • ${nowPlaying.album}` : ""}
-                </p>
               </div>
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.7rem" }}>
-              <button type="button" onClick={onTogglePlayPause}>
-                {isPlaying ? "Pause" : "Play"}
-              </button>
-              <button type="button" className="primary" onClick={() => void onNextTrack()}>
-                Next / Skip
-              </button>
-              <button type="button" onClick={() => onFeedback(true)}>
-                Like
-              </button>
-              <button type="button" onClick={() => onFeedback(false)}>
-                Dislike
-              </button>
-            </div>
-          </>
-        ) : (
-          <p className="meta">Tune a station to begin playback.</p>
-        )}
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.7rem" }}>
+                <button type="button" onClick={onTogglePlayPause}>
+                  {isPlaying ? "Pause" : "Play"}
+                </button>
+                <button type="button" className="primary" onClick={() => void onNextTrack()}>
+                  Next / Skip
+                </button>
+                <button type="button" onClick={() => onFeedback(true)}>
+                  Like
+                </button>
+                <button type="button" onClick={() => onFeedback(false)}>
+                  Dislike
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="meta">Tune a station to begin playback.</p>
+          )}
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h3>Next Up</h3>
-          <button type="button" onClick={() => setShowNextUp((value) => !value)}>
-            {showNextUp ? "Hide" : "Show"}
-          </button>
-        </div>
-        {showNextUp ? (
-          <ol className="queue">
-            {nextUp.map((track, index) => (
-              <li key={`${track.navidromeSongId}-${index}`}>
-                {track.title} <span className="meta">({track.artist})</span>
-              </li>
-            ))}
-          </ol>
-        ) : null}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <h3>Next Up</h3>
+            <button type="button" onClick={() => setShowNextUp((value) => !value)}>
+              {showNextUp ? "Hide" : "Show"}
+            </button>
+          </div>
+          {showNextUp ? (
+            <ol className="queue">
+              {nextUp.map((track, index) => (
+                <li key={`${track.navidromeSongId}-${index}`}>
+                  {track.title} <span className="meta">({track.artist})</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
 
-        {status ? <p>{status}</p> : null}
-        {error ? <p className="error">{error}</p> : null}
-      </section>
+          {status ? <p>{status}</p> : null}
+          {error ? <p className="error">{error}</p> : null}
+        </section>
+      ) : null}
     </div>
   );
 }
