@@ -22,6 +22,7 @@ interface PlaybackMeta {
 }
 
 type RadioUiMode = "MODERN" | "RETRO_AM" | "RETRO_FM" | "CAR";
+type CarBandMode = "FM" | "AM";
 
 const RADIO_UI_MODE_STORAGE_KEY = "music-cable-box.radio.ui-mode";
 
@@ -73,6 +74,8 @@ export default function RadioPage() {
   const [audioMode, setAudioMode] = useState<AudioMode>("UNMODIFIED");
   const [audioModePending, setAudioModePending] = useState(false);
   const [uiMode, setUiMode] = useState<RadioUiMode>("MODERN");
+  const [carBandMode, setCarBandMode] = useState<CarBandMode>("FM");
+  const [carHdRadioEnabled, setCarHdRadioEnabled] = useState(false);
   const [artworkLoadFailed, setArtworkLoadFailed] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -179,6 +182,16 @@ export default function RadioPage() {
   useEffect(() => {
     setArtworkLoadFailed(false);
   }, [nowPlaying?.navidromeSongId, nowPlaying?.artworkUrl]);
+
+  useEffect(() => {
+    if (audioMode === "UNMODIFIED") {
+      setCarHdRadioEnabled(true);
+      return;
+    }
+
+    setCarHdRadioEnabled(false);
+    setCarBandMode(audioMode === "AM" ? "AM" : "FM");
+  }, [audioMode]);
 
   function beginSwitchRequest(): number {
     switchRequestIdRef.current += 1;
@@ -522,9 +535,9 @@ export default function RadioPage() {
     }
   }
 
-  async function onChangeAudioMode(nextMode: AudioMode) {
+  async function onChangeAudioMode(nextMode: AudioMode): Promise<boolean> {
     if (!token || nextMode === audioMode) {
-      return;
+      return true;
     }
 
     const previousMode = audioMode;
@@ -576,11 +589,44 @@ export default function RadioPage() {
           shouldAutoPlay: shouldResumePlayback
         });
       }
+      return true;
     } catch (err) {
       setAudioMode(previousMode);
       setError(err instanceof Error ? err.message : "Failed to update audio mode");
+      return false;
     } finally {
       setAudioModePending(false);
+    }
+  }
+
+  async function onSelectCarBandMode(nextBandMode: CarBandMode) {
+    setCarBandMode(nextBandMode);
+    if (carHdRadioEnabled) {
+      setStatus(`Band switched to ${nextBandMode}. HD Radio keeps Clean audio.`);
+      return;
+    }
+
+    await onChangeAudioMode(nextBandMode);
+  }
+
+  async function onToggleCarHdRadio() {
+    if (audioModePending) {
+      return;
+    }
+
+    if (!carHdRadioEnabled) {
+      setCarHdRadioEnabled(true);
+      const success = await onChangeAudioMode("UNMODIFIED");
+      if (!success) {
+        setCarHdRadioEnabled(false);
+      }
+      return;
+    }
+
+    setCarHdRadioEnabled(false);
+    const success = await onChangeAudioMode(carBandMode);
+    if (!success) {
+      setCarHdRadioEnabled(true);
     }
   }
 
@@ -720,25 +766,25 @@ export default function RadioPage() {
                 <div className="car-top-strip">
                   <div className="car-breadcrumb">
                     <span className="car-home-icon">⌂</span>
-                    <span>Radio &gt; {audioMode === "AM" ? "AM" : "FM"}</span>
+                    <span>Radio &gt; {carBandMode}</span>
                   </div>
-                  <div className="car-mode-chip">{audioMode === "AM" ? "AM" : "FM"}</div>
+                  <div className="car-mode-chip">{carBandMode}</div>
                 </div>
 
                 <div className="car-main-screen">
                   <div className="car-band-stack">
                     <button
                       type="button"
-                      className={audioMode === "FM" ? "car-band-btn active" : "car-band-btn"}
-                      onClick={() => void onChangeAudioMode("FM")}
+                      className={carBandMode === "FM" ? "car-band-btn active" : "car-band-btn"}
+                      onClick={() => void onSelectCarBandMode("FM")}
                       disabled={audioModePending}
                     >
                       FM
                     </button>
                     <button
                       type="button"
-                      className={audioMode === "AM" ? "car-band-btn active" : "car-band-btn"}
-                      onClick={() => void onChangeAudioMode("AM")}
+                      className={carBandMode === "AM" ? "car-band-btn active" : "car-band-btn"}
+                      onClick={() => void onSelectCarBandMode("AM")}
                       disabled={audioModePending}
                     >
                       AM
@@ -797,11 +843,12 @@ export default function RadioPage() {
                     </button>
                     <button
                       type="button"
-                      className="car-softkey-btn"
-                      onClick={() => setStatus("HD Radio toggle is not available in MVP yet.")}
+                      className={carHdRadioEnabled ? "car-softkey-btn active" : "car-softkey-btn"}
+                      onClick={() => void onToggleCarHdRadio()}
+                      disabled={audioModePending}
                     >
                       HD Radio
-                      <span className="car-softkey-sub">Off</span>
+                      <span className="car-softkey-sub">{carHdRadioEnabled ? "On (Clean)" : "Off"}</span>
                     </button>
                     <button
                       type="button"
@@ -834,7 +881,7 @@ export default function RadioPage() {
                       >
                         <span className="car-preset-slot">{index + 1}</span>
                         <span className="car-preset-main">{preset ? preset.frequencyLabel : "Hold"}</span>
-                        <span className="car-preset-sub">{preset ? (audioMode === "AM" ? "AM" : "FM") : "Empty"}</span>
+                        <span className="car-preset-sub">{preset ? carBandMode : "Empty"}</span>
                       </button>
                     );
                   })}

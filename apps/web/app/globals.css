@@ -679,6 +679,12 @@ p.error {
   opacity: 0.62;
 }
 
+.car-softkey-btn.active {
+  border-color: #6fb3eb;
+  background: linear-gradient(180deg, #4f83b1 0%, #325c80 100%);
+  color: #f1f8ff;
+}
+
 .car-softkey-sub {
   font-size: 0.76rem;
   opacity: 0.9;
