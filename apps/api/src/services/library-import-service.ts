@@ -26,7 +26,36 @@ export async function getClientForUser(userId: string): Promise<NavidromeClient>
   });
 }
 
+const importsInFlight = new Set<string>();
+
+export class ImportAlreadyRunningError extends Error {
+  constructor() {
+    super("A library import is already running");
+    this.name = "ImportAlreadyRunningError";
+  }
+}
+
+export function isImportRunning(userId: string): boolean {
+  return importsInFlight.has(userId);
+}
+
 export async function importLibraryForUser(userId: string, input: NavidromeImportInput) {
+  // An import is a long sequential walk of the Navidrome API. Two of them at
+  // once fight over the same SQLite writer and neither finishes cleanly.
+  if (importsInFlight.has(userId)) {
+    throw new ImportAlreadyRunningError();
+  }
+
+  importsInFlight.add(userId);
+
+  try {
+    return await runImport(userId, input);
+  } finally {
+    importsInFlight.delete(userId);
+  }
+}
+
+async function runImport(userId: string, input: NavidromeImportInput) {
   const client = await getClientForUser(userId);
 
   if (input.fullResync) {

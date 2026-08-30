@@ -260,6 +260,18 @@ export async function saveFeedback(payload: FeedbackInput) {
   });
 }
 
+export interface SavedNavidromeAccount {
+  id: string;
+  baseUrl: string;
+  username: string;
+  updatedAt: string;
+}
+
+export async function getNavidromeAccount() {
+  const data = await apiRequest<{ account: SavedNavidromeAccount | null }>("/api/navidrome/account");
+  return data.account;
+}
+
 export async function testNavidromeConnection(payload: NavidromeConnectionInput) {
   return apiRequest<{
     ok: boolean;
