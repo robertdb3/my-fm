@@ -9,5 +9,10 @@ export function createSubsonicToken(password: string, salt: string): string {
 }
 
 export function normalizeBaseUrl(url: string): string {
-  return url.endsWith("/") ? url.slice(0, -1) : url;
+  // Tolerate hand-typed values: stray whitespace, a dropped slash after the
+  // scheme ("https:/host"), and any number of trailing slashes.
+  return url
+    .trim()
+    .replace(/^(https?:)\/*/i, "$1//")
+    .replace(/\/+$/, "");
 }

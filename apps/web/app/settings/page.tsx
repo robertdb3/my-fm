@@ -1,9 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ApiRequestError, importLibrary, testNavidromeConnection } from "../../src/lib/api";
-
-const STORAGE_KEY = "music-cable-box-navidrome-settings";
+import {
+  ApiRequestError,
+  getNavidromeAccount,
+  importLibrary,
+  testNavidromeConnection,
+  type SavedNavidromeAccount
+} from "../../src/lib/api";
 
 export default function SettingsPage() {
   const [baseUrl, setBaseUrl] = useState("http://localhost:4533");
@@ -16,29 +20,26 @@ export default function SettingsPage() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [pendingTest, setPendingTest] = useState(false);
   const [pendingImport, setPendingImport] = useState(false);
+  const [savedAccount, setSavedAccount] = useState<SavedNavidromeAccount | null>(null);
+  const [loadingAccount, setLoadingAccount] = useState(true);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as {
-        baseUrl?: string;
-        username?: string;
-      };
-
-      if (parsed.baseUrl) {
-        setBaseUrl(parsed.baseUrl);
-      }
-
-      if (parsed.username) {
-        setUsername(parsed.username);
-      }
-    } catch {
-      // Ignore invalid local state.
-    }
+    // The saved connection lives on the server, not in this browser, so it
+    // shows up the same on every device.
+    getNavidromeAccount()
+      .then((account) => {
+        setSavedAccount(account);
+        if (account) {
+          setBaseUrl(account.baseUrl);
+          setUsername(account.username);
+        }
+      })
+      .catch(() => {
+        // Leave the form on its defaults; the error surfaces when saving.
+      })
+      .finally(() => {
+        setLoadingAccount(false);
+      });
   }, []);
 
   async function onTestConnection(event: FormEvent<HTMLFormElement>) {
@@ -54,14 +55,9 @@ export default function SettingsPage() {
         password
       });
 
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          baseUrl,
-          username
-        })
-      );
-
+      setSavedAccount(response.account);
+      setBaseUrl(response.account.baseUrl);
+      setPassword("");
       setStatus(`Connected. Tokenized credentials saved for ${response.account.username}.`);
     } catch (err) {
       if (err instanceof ApiRequestError) {
@@ -89,7 +85,11 @@ export default function SettingsPage() {
         `Imported artists: ${response.result.importedArtists}, albums: ${response.result.importedAlbums}, tracks: ${response.result.importedTracks}`
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Library import failed");
+      if (err instanceof ApiRequestError && err.status === 409) {
+        setError("An import is already running. Give it a few minutes to finish.");
+      } else {
+        setError(err instanceof Error ? err.message : "Library import failed");
+      }
     } finally {
       setPendingImport(false);
     }
@@ -103,6 +103,18 @@ export default function SettingsPage() {
           Credentials are converted to Subsonic token+salt and persisted in the app DB. The raw password is
           used only to derive token material.
         </p>
+
+        {loadingAccount ? (
+          <p className="meta">Checking saved connection...</p>
+        ) : savedAccount ? (
+          <p className="meta">
+            Connected as <strong>{savedAccount.username}</strong> at <strong>{savedAccount.baseUrl}</strong>{" "}
+            (saved {new Date(savedAccount.updatedAt).toLocaleString()}). Re-enter the password only to change
+            the saved credentials.
+          </p>
+        ) : (
+          <p className="meta">No Navidrome connection saved yet.</p>
+        )}
 
         <form onSubmit={onTestConnection} style={{ display: "grid", gap: "0.85rem" }}>
           <label>
@@ -140,7 +152,10 @@ export default function SettingsPage() {
 
       <section className="card" style={{ gridColumn: "span 5" }}>
         <h2>Import Library</h2>
-        <p className="meta">Imports metadata into local cache for fast station generation.</p>
+        <p className="meta">
+          Imports metadata into local cache for fast station generation. A full library takes a few minutes
+          and the page will sit on &quot;Importing...&quot; until it finishes — that is expected, not a hang.
+        </p>
 
         <label>
           Max artists per import run

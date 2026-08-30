@@ -46,6 +46,8 @@ export interface NavidromeArtist {
   name: string;
 }
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
 function toArray<T>(value: T | T[] | undefined): T[] {
   if (!value) {
     return [];
@@ -89,11 +91,23 @@ export class NavidromeClient {
       url.searchParams.set(key, String(value));
     }
 
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json"
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          Accept: "application/json"
+        },
+        // Node's fetch has no default timeout, so a stalled Navidrome would
+        // hang the calling request (and a library import) indefinitely.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw new Error(`Navidrome request timed out after ${REQUEST_TIMEOUT_MS / 1000}s (${endpoint})`);
       }
-    });
+
+      throw error;
+    }
 
     if (!response.ok) {
       throw new Error(`Navidrome request failed (${response.status})`);

@@ -14,7 +14,26 @@ import type {
 } from "@music-cable-box/shared";
 import type { TunerStation } from "@music-cable-box/shared";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const CONFIGURED_API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+const DEV_API_URL = "http://localhost:4000";
+
+/**
+ * In deployment the API is served from the same origin as the web app (nginx
+ * proxies /api to it), so fall back to the page origin instead of a hardcoded
+ * host. NEXT_PUBLIC_API_URL still wins when the two are served separately, as
+ * they are in local dev.
+ */
+function apiBaseUrl() {
+  if (CONFIGURED_API_URL) {
+    return CONFIGURED_API_URL;
+  }
+
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+
+  return DEV_API_URL;
+}
 
 export function buildProxyStreamUrl(params: {
   navidromeSongId: string;
@@ -23,7 +42,7 @@ export function buildProxyStreamUrl(params: {
   format?: "mp3" | "aac";
   bitrateKbps?: number;
 }) {
-  const url = new URL(`${API_BASE_URL}/api/stream/${encodeURIComponent(params.navidromeSongId)}`);
+  const url = new URL(`${apiBaseUrl()}/api/stream/${encodeURIComponent(params.navidromeSongId)}`);
   url.searchParams.set("mode", params.mode);
   if (params.offsetSec !== undefined && params.offsetSec > 0) {
     url.searchParams.set("offsetSec", String(Math.floor(params.offsetSec)));
@@ -61,7 +80,7 @@ export async function apiRequest<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
     method: options.method ?? "GET",
     headers,
     body: hasBody ? JSON.stringify(options.body) : undefined
@@ -239,6 +258,18 @@ export async function saveFeedback(payload: FeedbackInput) {
     method: "POST",
     body: payload
   });
+}
+
+export interface SavedNavidromeAccount {
+  id: string;
+  baseUrl: string;
+  username: string;
+  updatedAt: string;
+}
+
+export async function getNavidromeAccount() {
+  const data = await apiRequest<{ account: SavedNavidromeAccount | null }>("/api/navidrome/account");
+  return data.account;
 }
 
 export async function testNavidromeConnection(payload: NavidromeConnectionInput) {

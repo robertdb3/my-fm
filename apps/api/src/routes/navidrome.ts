@@ -6,6 +6,26 @@ import { createSubsonicToken, generateSalt, normalizeBaseUrl } from "../lib/subs
 import { NavidromeClient } from "../services/navidrome-client";
 
 export const navidromeRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/api/navidrome/account", async (request) => {
+    const account = await prisma.navidromeAccount.findUnique({
+      where: {
+        userId: request.appUser.id
+      }
+    });
+
+    // Token and salt are deliberately not returned.
+    return {
+      account: account
+        ? {
+            id: account.id,
+            baseUrl: account.baseUrl,
+            username: account.username,
+            updatedAt: account.updatedAt
+          }
+        : null
+    };
+  });
+
   app.post(
     "/api/navidrome/test-connection",
     async (request, reply) => {
