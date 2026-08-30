@@ -140,13 +140,12 @@ export function validateRuleDraft(draft: StationRuleDraft): {
 }
 
 interface StationRuleBuilderProps {
-  token: string;
   draft: StationRuleDraft;
   errors: Record<string, string>;
   onChange(nextDraft: StationRuleDraft): void;
 }
 
-export function StationRuleBuilder({ token, draft, errors, onChange }: StationRuleBuilderProps) {
+export function StationRuleBuilder({ draft, errors, onChange }: StationRuleBuilderProps) {
   const update = <K extends keyof StationRuleDraft>(key: K, value: StationRuleDraft[K]) => {
     onChange({
       ...draft,
@@ -159,7 +158,6 @@ export function StationRuleBuilder({ token, draft, errors, onChange }: StationRu
       <MultiSelectAutocomplete
         label="Include genres"
         field="genre"
-        token={token}
         values={draft.includeGenres}
         onChange={(values) => update("includeGenres", values)}
         error={errors.includeGenres}
@@ -169,7 +167,6 @@ export function StationRuleBuilder({ token, draft, errors, onChange }: StationRu
       <MultiSelectAutocomplete
         label="Exclude genres"
         field="genre"
-        token={token}
         values={draft.excludeGenres}
         onChange={(values) => update("excludeGenres", values)}
         error={errors.excludeGenres}
@@ -179,7 +176,6 @@ export function StationRuleBuilder({ token, draft, errors, onChange }: StationRu
       <MultiSelectAutocomplete
         label="Include artists"
         field="artist"
-        token={token}
         values={draft.includeArtists}
         onChange={(values) => update("includeArtists", values)}
         error={errors.includeArtists}
@@ -189,7 +185,6 @@ export function StationRuleBuilder({ token, draft, errors, onChange }: StationRu
       <MultiSelectAutocomplete
         label="Exclude artists"
         field="artist"
-        token={token}
         values={draft.excludeArtists}
         onChange={(values) => update("excludeArtists", values)}
         error={errors.excludeArtists}
@@ -199,7 +194,6 @@ export function StationRuleBuilder({ token, draft, errors, onChange }: StationRu
       <MultiSelectAutocomplete
         label="Include albums"
         field="album"
-        token={token}
         values={draft.includeAlbums}
         onChange={(values) => update("includeAlbums", values)}
         error={errors.includeAlbums}
@@ -209,7 +203,6 @@ export function StationRuleBuilder({ token, draft, errors, onChange }: StationRu
       <MultiSelectAutocomplete
         label="Exclude albums"
         field="album"
-        token={token}
         values={draft.excludeAlbums}
         onChange={(values) => update("excludeAlbums", values)}
         error={errors.excludeAlbums}

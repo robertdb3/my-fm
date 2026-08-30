@@ -45,7 +45,6 @@ function stationToEditorDraft(station: Station): StationEditorDraft {
 }
 
 interface StationEditorPanelProps {
-  token: string;
   editingStation: Station | null;
   pending: boolean;
   onSave(payload: StationSavePayload): Promise<void>;
@@ -55,7 +54,6 @@ interface StationEditorPanelProps {
 }
 
 export function StationEditorPanel({
-  token,
   editingStation,
   pending,
   onSave,
@@ -104,7 +102,7 @@ export function StationEditorPanel({
       setPreviewLoading(true);
 
       try {
-        const result = await previewStationRules({ rules: validRules }, token);
+        const result = await previewStationRules({ rules: validRules });
 
         if (previewRequestSeqRef.current === requestSeq) {
           setPreviewCount(result.matchingTrackCount);
@@ -123,7 +121,7 @@ export function StationEditorPanel({
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [rulesValidation.rules, token]);
+  }, [rulesValidation.rules]);
 
   async function submit() {
     setFormError(null);
@@ -227,7 +225,6 @@ export function StationEditorPanel({
         </label>
 
         <StationRuleBuilder
-          token={token}
           draft={draft.rules}
           onChange={(nextRules) => {
             setDraft((prev) => ({

@@ -6,9 +6,6 @@ import { importLibraryForUser } from "../services/library-import-service";
 export const libraryRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/api/library/import",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = NavidromeImportInputSchema.safeParse(request.body ?? {});
 

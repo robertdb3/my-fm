@@ -1,8 +1,7 @@
 import { spawn } from "node:child_process";
-import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { AudioModeSchema } from "@music-cable-box/shared";
-import { prisma } from "../db";
 import { sendError } from "../lib/errors";
 import { getClientForUser } from "../services/library-import-service";
 import { buildFfmpegPlan, defaultBitrateForMode } from "../services/stream-proxy";
@@ -12,31 +11,8 @@ const StreamQuerySchema = z.object({
   mode: AudioModeSchema.optional(),
   offsetSec: z.coerce.number().int().min(0).max(60 * 60 * 24).optional(),
   format: z.enum(["mp3", "aac"]).optional(),
-  bitrateKbps: z.coerce.number().int().min(32).max(320).optional(),
-  accessToken: z.string().min(1).optional()
+  bitrateKbps: z.coerce.number().int().min(32).max(320).optional()
 });
-
-interface JwtPayload {
-  sub: string;
-}
-
-async function authenticateStreamRequest(request: FastifyRequest) {
-  const authHeader = request.headers.authorization;
-
-  if (authHeader?.startsWith("Bearer ")) {
-    const payload = await request.jwtVerify<JwtPayload>();
-    return payload.sub;
-  }
-
-  const parsedQuery = StreamQuerySchema.safeParse(request.query);
-  const accessToken = parsedQuery.success ? parsedQuery.data.accessToken : undefined;
-  if (!accessToken) {
-    throw new Error("Authentication required");
-  }
-
-  const payload = await request.server.jwt.verify<JwtPayload>(accessToken);
-  return payload.sub;
-}
 
 export const streamRoutes: FastifyPluginAsync = async (app) => {
   app.get(
@@ -48,20 +24,7 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
         return sendError(reply, 400, "BAD_REQUEST", "Invalid stream query", queryParsed.error.flatten());
       }
 
-      let userId: string;
-      try {
-        userId = await authenticateStreamRequest(request);
-      } catch {
-        return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
-      }
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true }
-      });
-      if (!user) {
-        return sendError(reply, 401, "UNAUTHORIZED", "Session is not valid");
-      }
+      const userId = request.appUser.id;
 
       const client = await getClientForUser(userId);
       const defaultMode = await getUserAudioMode(userId);

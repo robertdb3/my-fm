@@ -14,7 +14,6 @@ import {
   stepTuner
 } from "../../src/lib/api";
 import { clampTunerIndex, RADIO_SCAN_INTERVAL_MS, RADIO_TUNE_DEBOUNCE_MS } from "../../src/lib/radio-tuner";
-import { useRequireAuth } from "../../src/lib/useRequireAuth";
 
 interface PlaybackMeta {
   startOffsetSec: number;
@@ -59,7 +58,6 @@ function getStreamOffsetSec(streamUrl: string): number {
 }
 
 export default function RadioPage() {
-  const token = useRequireAuth();
   const [stations, setStations] = useState<TunerStation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentStationId, setCurrentStationId] = useState<string | null>(null);
@@ -113,13 +111,9 @@ export default function RadioPage() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-
     const run = async () => {
       try {
-        const items = await getTunerStations(token);
+        const items = await getTunerStations();
         setStations(items);
         setCurrentIndex((value) => clampTunerIndex(value, items.length));
         setError(null);
@@ -131,16 +125,12 @@ export default function RadioPage() {
     run().catch(() => {
       // no-op
     });
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-
     const run = async () => {
       try {
-        const settings = await getSettings(token);
+        const settings = await getSettings();
         setAudioMode(settings.audioMode);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load audio settings");
@@ -150,7 +140,7 @@ export default function RadioPage() {
     run().catch(() => {
       // no-op
     });
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     if (stations.length === 0) {
@@ -307,7 +297,7 @@ export default function RadioPage() {
     setError(null);
 
     try {
-      const response = await startStation(station.id, token, { reason: "manual" });
+      const response = await startStation(station.id, { reason: "manual" });
       if (!isLatestSwitchRequest(requestId)) {
         return false;
       }
@@ -343,7 +333,7 @@ export default function RadioPage() {
     setError(null);
 
     try {
-      const response = await stepTuner(token, {
+      const response = await stepTuner({
         direction,
         fromStationId: currentStationIdRef.current ?? stations[currentIndexRef.current]?.id,
         wrap: true,
@@ -436,7 +426,7 @@ export default function RadioPage() {
         scanIntervalRef.current = null;
       }
     };
-  }, [isScanning, stations.length, token]);
+  }, [isScanning, stations.length]);
 
   async function onNextTrack(options?: { skipped?: boolean; stopScan?: boolean }) {
     if (!currentStationId) {
@@ -454,14 +444,14 @@ export default function RadioPage() {
       const listenSeconds = Math.floor(audioRef.current?.currentTime ?? 0);
       const requestId = beginSwitchRequest();
       const [nextResponse, peekResponse] = await Promise.all([
-        nextStationTrack(currentStationId, token, {
+        nextStationTrack(currentStationId, {
           previousTrackId: nowPlaying?.navidromeSongId,
           listenSeconds,
           skipped,
           previousStartOffsetSec: currentPlayback?.startOffsetSec ?? 0,
           previousReason: currentPlayback?.reason
         }),
-        peekStation(currentStationId, 10, token)
+        peekStation(currentStationId, 10)
       ]);
 
       if (!isLatestSwitchRequest(requestId)) {
@@ -498,7 +488,7 @@ export default function RadioPage() {
     return () => {
       audio.removeEventListener("ended", onEnded);
     };
-  }, [currentPlayback?.reason, currentPlayback?.startOffsetSec, currentStationId, isScanning, nowPlaying?.navidromeSongId, token]);
+  }, [currentPlayback?.reason, currentPlayback?.startOffsetSec, currentStationId, isScanning, nowPlaying?.navidromeSongId]);
 
   function onTogglePlayPause() {
     const audio = audioRef.current;
@@ -526,8 +516,7 @@ export default function RadioPage() {
           navidromeSongId: nowPlaying.navidromeSongId,
           liked,
           disliked: !liked
-        },
-        token
+        }
       );
       setStatus(liked ? "Track liked" : "Track disliked");
     } catch (err) {
@@ -536,7 +525,7 @@ export default function RadioPage() {
   }
 
   async function onChangeAudioMode(nextMode: AudioMode): Promise<boolean> {
-    if (!token || nextMode === audioMode) {
+    if (nextMode === audioMode) {
       return true;
     }
 
@@ -546,12 +535,9 @@ export default function RadioPage() {
     setError(null);
 
     try {
-      await patchSettings(
-        {
-          audioMode: nextMode
-        },
-        token
-      );
+      await patchSettings({
+        audioMode: nextMode
+      });
 
       setStatus(
         nextMode === "UNMODIFIED"
@@ -686,10 +672,6 @@ export default function RadioPage() {
   const isRetroAmMode = uiMode === "RETRO_AM";
   const isRetroFmMode = uiMode === "RETRO_FM";
   const isCarMode = uiMode === "CAR";
-
-  if (!token) {
-    return <section className="card">Checking auth...</section>;
-  }
 
   return (
     <div

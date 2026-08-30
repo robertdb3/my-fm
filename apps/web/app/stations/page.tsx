@@ -20,7 +20,6 @@ import {
   type StationSavePayload
 } from "../../src/components/stations/station-editor-panel";
 import { StationListPanel } from "../../src/components/stations/station-list-panel";
-import { useRequireAuth } from "../../src/lib/useRequireAuth";
 
 function getStreamOffsetSec(streamUrl: string): number {
   try {
@@ -42,7 +41,6 @@ function getStreamOffsetSec(streamUrl: string): number {
 }
 
 export default function StationsPage() {
-  const token = useRequireAuth();
 
   const [stations, setStations] = useState<Station[]>([]);
   const [editingStationId, setEditingStationId] = useState<string | null>(null);
@@ -82,13 +80,9 @@ export default function StationsPage() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-
     const run = async () => {
       try {
-        const list = await getStations(token, {
+        const list = await getStations({
           includeHidden: showHiddenStations
         });
         setStations(list);
@@ -100,7 +94,7 @@ export default function StationsPage() {
     run().catch(() => {
       // no-op
     });
-  }, [showHiddenStations, token]);
+  }, [showHiddenStations]);
 
   useEffect(() => {
     if (!nowPlaying || !audioRef.current) {
@@ -197,7 +191,7 @@ export default function StationsPage() {
   }, [currentStartOffsetSec, nowPlaying]);
 
   async function refreshStations() {
-    const list = await getStations(token, {
+    const list = await getStations({
       includeHidden: showHiddenStations
     });
     setStations(list);
@@ -216,9 +210,9 @@ export default function StationsPage() {
       };
 
       if (payload.stationId) {
-        await updateStationApi(payload.stationId, stationPayload, token);
+        await updateStationApi(payload.stationId, stationPayload);
       } else {
-        await createStationApi(stationPayload, token);
+        await createStationApi(stationPayload);
       }
 
       await refreshStations();
@@ -228,7 +222,7 @@ export default function StationsPage() {
   }
 
   async function handleDelete(stationId: string) {
-    await deleteStationApi(stationId, token);
+    await deleteStationApi(stationId);
 
     if (currentStationId === stationId) {
       setCurrentStationId(null);
@@ -242,15 +236,12 @@ export default function StationsPage() {
   }
 
   async function handleDuplicate(station: Station) {
-    await createStationApi(
-      {
-        name: `${station.name} (Copy)`,
-        description: station.description ?? undefined,
-        rules: station.rules,
-        isEnabled: station.isEnabled
-      },
-      token
-    );
+    await createStationApi({
+      name: `${station.name} (Copy)`,
+      description: station.description ?? undefined,
+      rules: station.rules,
+      isEnabled: station.isEnabled
+    });
 
     await refreshStations();
   }
@@ -267,7 +258,7 @@ export default function StationsPage() {
     }
 
     try {
-      const response = await startStation(stationId, token);
+      const response = await startStation(stationId);
       setCurrentStationId(stationId);
       setCurrentStartOffsetSec(response.playback.startOffsetSec);
       setNowPlaying(response.nowPlaying);
@@ -290,12 +281,12 @@ export default function StationsPage() {
       const previousTrackId = nowPlaying?.navidromeSongId;
 
       const [nextResponse, peekResponse] = await Promise.all([
-        nextStationTrack(currentStationId, token, {
+        nextStationTrack(currentStationId, {
           previousTrackId,
           listenSeconds: listenedSeconds,
           skipped
         }),
-        peekStation(currentStationId, 10, token)
+        peekStation(currentStationId, 10)
       ]);
 
       setCurrentStartOffsetSec(nextResponse.playback?.startOffsetSec ?? 0);
@@ -323,7 +314,7 @@ export default function StationsPage() {
     return () => {
       audio.removeEventListener("ended", onEnded);
     };
-  }, [currentStationId, currentStartOffsetSec, nowPlaying?.navidromeSongId, token]);
+  }, [currentStationId, currentStartOffsetSec, nowPlaying?.navidromeSongId]);
 
   function togglePlayPause() {
     const audio = audioRef.current;
@@ -346,14 +337,11 @@ export default function StationsPage() {
     }
 
     try {
-      await saveFeedback(
-        {
-          navidromeSongId: nowPlaying.navidromeSongId,
-          liked,
-          disliked: !liked
-        },
-        token
-      );
+      await saveFeedback({
+        navidromeSongId: nowPlaying.navidromeSongId,
+        liked,
+        disliked: !liked
+      });
 
       setStatus(liked ? "Marked as liked" : "Marked as disliked");
     } catch (err) {
@@ -367,7 +355,7 @@ export default function StationsPage() {
     setError(null);
 
     try {
-      const result = await regenerateSystemStations({}, token);
+      const result = await regenerateSystemStations({});
       setSystemStatus(
         `System stations: ${result.created} created, ${result.updated} updated, ${result.disabledOrHidden} hidden.`
       );
@@ -381,13 +369,9 @@ export default function StationsPage() {
 
   async function handleToggleStationEnabled(stationId: string, isEnabled: boolean) {
     try {
-      await patchStationApi(
-        stationId,
-        {
-          isEnabled
-        },
-        token
-      );
+      await patchStationApi(stationId, {
+        isEnabled
+      });
       await refreshStations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update station");
@@ -396,21 +380,13 @@ export default function StationsPage() {
 
   async function handleToggleSystemStationHidden(stationId: string, isHidden: boolean) {
     try {
-      await patchStationApi(
-        stationId,
-        {
-          isHidden
-        },
-        token
-      );
+      await patchStationApi(stationId, {
+        isHidden
+      });
       await refreshStations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update station visibility");
     }
-  }
-
-  if (!token) {
-    return <section className="card">Checking auth...</section>;
   }
 
   return (
@@ -434,7 +410,6 @@ export default function StationsPage() {
         />
 
         <StationEditorPanel
-          token={token}
           editingStation={editingStation}
           pending={pendingSave}
           onSave={handleSave}

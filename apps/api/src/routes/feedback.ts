@@ -6,9 +6,6 @@ import { sendError } from "../lib/errors";
 export const feedbackRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/api/feedback",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = FeedbackInputSchema.safeParse(request.body);
 

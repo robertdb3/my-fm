@@ -7,7 +7,6 @@ interface MultiSelectAutocompleteProps {
   label: string;
   field: "genre" | "artist" | "album";
   values: string[];
-  token: string;
   placeholder?: string;
   error?: string;
   onChange(nextValues: string[]): void;
@@ -25,7 +24,6 @@ export function MultiSelectAutocomplete({
   label,
   field,
   values,
-  token,
   placeholder,
   error,
   onChange
@@ -45,7 +43,7 @@ export function MultiSelectAutocomplete({
     const timeout = window.setTimeout(async () => {
       setLoading(true);
       try {
-        const response = await getRuleOptions(field, query, token);
+        const response = await getRuleOptions(field, query);
         setOptions(response.options);
       } catch {
         setOptions([]);
@@ -57,7 +55,7 @@ export function MultiSelectAutocomplete({
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [field, open, query, token]);
+  }, [field, open, query]);
 
   function commitValue(value: string) {
     const normalized = normalizeValue(value);

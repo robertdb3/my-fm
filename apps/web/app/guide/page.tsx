@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { Station, Track } from "@music-cable-box/shared";
 import { getStations, peekStation } from "../../src/lib/api";
-import { useRequireAuth } from "../../src/lib/useRequireAuth";
 
 interface GuideEntry {
   station: Station;
@@ -11,26 +10,21 @@ interface GuideEntry {
 }
 
 export default function GuidePage() {
-  const token = useRequireAuth();
   const [guide, setGuide] = useState<GuideEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-
     const loadGuide = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const stations = await getStations(token);
+        const stations = await getStations();
         const entries = await Promise.all(
           stations.map(async (station) => {
             try {
-              const response = await peekStation(station.id, 10, token);
+              const response = await peekStation(station.id, 10);
               return {
                 station,
                 tracks: response.tracks
@@ -55,11 +49,7 @@ export default function GuidePage() {
     loadGuide().catch(() => {
       // no-op
     });
-  }, [token]);
-
-  if (!token) {
-    return <section className="card">Checking auth...</section>;
-  }
+  }, []);
 
   if (loading) {
     return <section className="card">Building guide preview...</section>;

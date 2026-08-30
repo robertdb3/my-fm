@@ -4,9 +4,6 @@ import { prisma } from "../db";
 export const historyRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/api/history",
-    {
-      preHandler: app.authenticate
-    },
     async (request) => {
       const query = request.query as { stationId?: string; limit?: string };
       const parsedLimit = Number(query.limit ?? "50");

@@ -37,19 +37,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
     return `${protocol}://${host}`;
   };
-  const getAccessTokenFromRequest = (request: { headers: Record<string, unknown> }) => {
-    const header = request.headers.authorization;
-    if (typeof header !== "string") {
-      return null;
-    }
-
-    if (!header.startsWith("Bearer ")) {
-      return null;
-    }
-
-    const token = header.slice(7).trim();
-    return token.length > 0 ? token : null;
-  };
   const toProxyTrack = (params: {
     track: {
       navidromeSongId: string;
@@ -68,7 +55,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       headers: Record<string, unknown>;
       protocol: string;
     };
-    accessToken: string;
   }) => {
     return {
       ...params.track,
@@ -76,7 +62,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
         origin: getRequestOrigin(params.request),
         navidromeSongId: params.track.navidromeSongId,
         mode: params.mode,
-        accessToken: params.accessToken,
         offsetSec: params.offsetSec
       })
     };
@@ -101,9 +86,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     "/api/stations",
-    {
-      preHandler: app.authenticate
-    },
     async (request) => {
       const query = request.query as {
         includeHidden?: string;
@@ -119,9 +101,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/api/stations",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = CreateStationSchema.safeParse(request.body);
 
@@ -136,9 +115,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     "/api/stations/tuner",
-    {
-      preHandler: app.authenticate
-    },
     async (request) => {
       const stations = await listTunerStations(request.appUser.id);
       return { stations };
@@ -147,9 +123,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/api/tuner/step",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = TunerStepInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -195,10 +168,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const accessToken = getAccessTokenFromRequest(request);
-        if (!accessToken) {
-          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
-        }
         const mode = await getUserAudioMode(request.appUser.id);
         const result = await advanceNextTrack(station.id, request.appUser.id, {
           reason: "manual"
@@ -208,7 +177,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           track: result.track,
           mode,
           request,
-          accessToken,
           offsetSec: result.playback.startOffsetSec
         });
         void sendNowPlayingScrobble({
@@ -220,8 +188,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           toProxyTrack({
             track,
             mode,
-            request,
-            accessToken
+            request
           })
         );
 
@@ -241,9 +208,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/api/stations/system/regenerate",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = SystemRegenerateInputSchema.safeParse(request.body ?? {});
 
@@ -258,9 +222,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     "/api/stations/rule-options",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const query = request.query as {
         field?: string;
@@ -335,9 +296,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     "/api/stations/preview",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const query = request.query as { stationId?: string };
 
@@ -358,9 +316,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/api/stations/preview",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const body = request.body as {
         stationId?: string;
@@ -396,9 +351,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     "/api/stations/:id",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const station = await getStationById(request.appUser.id, id);
@@ -413,9 +365,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.put(
     "/api/stations/:id",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = UpdateStationSchema.safeParse(request.body);
 
@@ -436,9 +385,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch(
     "/api/stations/:id",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = PatchStationSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -463,9 +409,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete(
     "/api/stations/:id",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const deleted = await deleteStation(request.appUser.id, id);
@@ -480,9 +423,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/api/stations/:id/play",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const station = await getStationById(request.appUser.id, id);
@@ -493,10 +433,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const accessToken = getAccessTokenFromRequest(request);
-        if (!accessToken) {
-          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
-        }
         const mode = await getUserAudioMode(request.appUser.id);
         const nowPlaying = await advanceNextTrack(station.id, request.appUser.id, {
           seed: body.seed,
@@ -509,7 +445,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           track: nowPlaying.track,
           mode,
           request,
-          accessToken,
           offsetSec: nowPlaying.playback.startOffsetSec
         });
         void sendNowPlayingScrobble({
@@ -521,8 +456,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           toProxyTrack({
             track,
             mode,
-            request,
-            accessToken
+            request
           })
         );
 
@@ -542,9 +476,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/api/stations/:id/next",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const station = await getStationById(request.appUser.id, id);
@@ -589,10 +520,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const accessToken = getAccessTokenFromRequest(request);
-        if (!accessToken) {
-          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
-        }
         const mode = await getUserAudioMode(request.appUser.id);
         const track = await advanceNextTrack(station.id, request.appUser.id, {
           seed: payload.seed,
@@ -606,8 +533,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
         const proxiedTrack = toProxyTrack({
           track: track.track,
           mode,
-          request,
-          accessToken
+          request
         });
         return {
           track: proxiedTrack,
@@ -623,9 +549,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     "/api/stations/:id/peek",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const station = await getStationById(request.appUser.id, id);
@@ -639,10 +562,6 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
       const n = Number.isFinite(parsedN) ? Math.min(50, Math.max(1, parsedN)) : 10;
 
       try {
-        const accessToken = getAccessTokenFromRequest(request);
-        if (!accessToken) {
-          return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
-        }
         const mode = await getUserAudioMode(request.appUser.id);
         const tracks = await peekNextTracks(station.id, request.appUser.id, n, {
           seed: query.seed
@@ -651,8 +570,7 @@ export const stationRoutes: FastifyPluginAsync = async (app) => {
           toProxyTrack({
             track,
             mode,
-            request,
-            accessToken
+            request
           })
         );
         return {

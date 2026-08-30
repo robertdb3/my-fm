@@ -254,11 +254,6 @@ export const FeedbackInputSchema = z.object({
   disliked: z.boolean().optional()
 });
 
-export const LoginInputSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1)
-});
-
 export const ApiErrorSchema = z.object({
   error: z.object({
     code: z.string(),
@@ -284,6 +279,5 @@ export type TunerStepResponse = z.infer<typeof TunerStepResponseSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 export type UpdateUserSettingsInput = z.infer<typeof UpdateUserSettingsSchema>;
 export type FeedbackInput = z.infer<typeof FeedbackInputSchema>;
-export type LoginInput = z.infer<typeof LoginInputSchema>;
 export type NavidromeConnectionInput = z.infer<typeof NavidromeConnectionInputSchema>;
 export type NavidromeImportInput = z.infer<typeof NavidromeImportInputSchema>;

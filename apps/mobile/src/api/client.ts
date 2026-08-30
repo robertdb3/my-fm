@@ -14,14 +14,12 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 export function buildProxyStreamUrl(params: {
   navidromeSongId: string;
   mode: AudioMode;
-  token: string;
   offsetSec?: number;
   format?: "mp3" | "aac";
   bitrateKbps?: number;
 }) {
   const url = new URL(`${API_BASE_URL}/api/stream/${encodeURIComponent(params.navidromeSongId)}`);
   url.searchParams.set("mode", params.mode);
-  url.searchParams.set("accessToken", params.token);
   if (params.offsetSec !== undefined && params.offsetSec > 0) {
     url.searchParams.set("offsetSec", String(Math.floor(params.offsetSec)));
   }
@@ -39,13 +37,10 @@ async function request<T>(
   options: {
     method?: string;
     body?: unknown;
-    token?: string | null;
   } = {}
 ) {
   const hasBody = options.body !== undefined;
-  const headers: Record<string, string> = {
-    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
-  };
+  const headers: Record<string, string> = {};
 
   if (hasBody) {
     headers["Content-Type"] = "application/json";
@@ -67,31 +62,18 @@ async function request<T>(
   return payload as T;
 }
 
-export async function login(email: string, password: string) {
-  return request<{ token: string }>("/api/auth/login", {
-    method: "POST",
-    body: {
-      email,
-      password
-    }
-  });
-}
-
-export async function getStations(token: string) {
-  const response = await request<{ stations: Station[] }>("/api/stations", { token });
+export async function getStations() {
+  const response = await request<{ stations: Station[] }>("/api/stations");
   return response.stations;
 }
 
-export async function getTunerStations(token: string) {
-  const response = await request<{ stations: TunerStation[] }>("/api/stations/tuner", {
-    token
-  });
+export async function getTunerStations() {
+  const response = await request<{ stations: TunerStation[] }>("/api/stations/tuner");
   return response.stations;
 }
 
 export async function playStation(
   stationId: string,
-  token: string,
   payload?: {
     seed?: string;
     reason?: "manual" | "resume";
@@ -101,31 +83,25 @@ export async function playStation(
     `/api/stations/${stationId}/play`,
     {
       method: "POST",
-      token,
       body: payload ?? {}
     }
   );
 }
 
-export async function stepTuner(
-  token: string,
-  payload: {
-    direction: "NEXT" | "PREV";
-    fromStationId?: string;
-    wrap?: boolean;
-    play?: boolean;
-  }
-) {
+export async function stepTuner(payload: {
+  direction: "NEXT" | "PREV";
+  fromStationId?: string;
+  wrap?: boolean;
+  play?: boolean;
+}) {
   return request<TunerStepResponse>("/api/tuner/step", {
     method: "POST",
-    body: payload,
-    token
+    body: payload
   });
 }
 
 export async function nextTrack(
   stationId: string,
-  token: string,
   payload?: {
     previousTrackId?: string;
     listenSeconds?: number;
@@ -136,70 +112,54 @@ export async function nextTrack(
 ) {
   return request<{ track: Track; playback?: NextPlayback }>(`/api/stations/${stationId}/next`, {
     method: "POST",
-    body: payload ?? {},
-    token
+    body: payload ?? {}
   });
 }
 
-export async function peekStation(stationId: string, token: string, n = 10) {
-  return request<{ tracks: Track[] }>(`/api/stations/${stationId}/peek?n=${n}`, { token });
+export async function peekStation(stationId: string, n = 10) {
+  return request<{ tracks: Track[] }>(`/api/stations/${stationId}/peek?n=${n}`);
 }
 
-export async function submitFeedback(
-  token: string,
-  payload: {
-    navidromeSongId: string;
-    liked: boolean;
-    disliked: boolean;
-  }
-) {
+export async function submitFeedback(payload: {
+  navidromeSongId: string;
+  liked: boolean;
+  disliked: boolean;
+}) {
   return request("/api/feedback", {
     method: "POST",
-    token,
     body: payload
   });
 }
 
-export async function testNavidrome(
-  token: string,
-  payload: {
-    baseUrl: string;
-    username: string;
-    password: string;
-  }
-) {
+export async function testNavidrome(payload: {
+  baseUrl: string;
+  username: string;
+  password: string;
+}) {
   return request("/api/navidrome/test-connection", {
     method: "POST",
-    token,
     body: payload
   });
 }
 
-export async function importLibrary(token: string, payload: { fullResync: boolean; maxArtists: number }) {
+export async function importLibrary(payload: { fullResync: boolean; maxArtists: number }) {
   return request<{ result: { importedTracks: number; importedAlbums: number; importedArtists: number } }>(
     "/api/library/import",
     {
       method: "POST",
-      token,
       body: payload
     }
   );
 }
 
-export async function getSettings(token: string) {
-  const response = await request<{ settings: UserSettings }>("/api/settings", { token });
+export async function getSettings() {
+  const response = await request<{ settings: UserSettings }>("/api/settings");
   return response.settings;
 }
 
-export async function patchSettings(
-  token: string,
-  payload: {
-    audioMode?: AudioMode;
-  }
-) {
+export async function patchSettings(payload: { audioMode?: AudioMode }) {
   const response = await request<{ settings: UserSettings }>("/api/settings", {
     method: "PATCH",
-    token,
     body: payload
   });
   return response.settings;

@@ -36,7 +36,6 @@ export interface BuildStreamProxyUrlOptions {
   origin: string;
   navidromeSongId: string;
   mode: AudioMode;
-  accessToken: string;
   offsetSec?: number;
   format?: AudioOutputFormat;
   bitrateKbps?: number;
@@ -51,7 +50,6 @@ export function buildStreamProxyUrl(options: BuildStreamProxyUrlOptions): string
   url.searchParams.set("mode", options.mode);
   url.searchParams.set("format", format);
   url.searchParams.set("bitrateKbps", String(bitrateKbps));
-  url.searchParams.set("accessToken", options.accessToken);
 
   if (offsetSec > 0) {
     url.searchParams.set("offsetSec", String(offsetSec));

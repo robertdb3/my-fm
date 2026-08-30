@@ -2,12 +2,10 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { ApiRequestError, importLibrary, testNavidromeConnection } from "../../src/lib/api";
-import { useRequireAuth } from "../../src/lib/useRequireAuth";
 
 const STORAGE_KEY = "music-cable-box-navidrome-settings";
 
 export default function SettingsPage() {
-  const token = useRequireAuth();
   const [baseUrl, setBaseUrl] = useState("http://localhost:4533");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -43,10 +41,6 @@ export default function SettingsPage() {
     }
   }, []);
 
-  if (!token) {
-    return <section className="card">Checking auth...</section>;
-  }
-
   async function onTestConnection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -54,14 +48,11 @@ export default function SettingsPage() {
     setPendingTest(true);
 
     try {
-      const response = await testNavidromeConnection(
-        {
-          baseUrl,
-          username,
-          password
-        },
-        token
-      );
+      const response = await testNavidromeConnection({
+        baseUrl,
+        username,
+        password
+      });
 
       window.localStorage.setItem(
         STORAGE_KEY,
@@ -89,13 +80,10 @@ export default function SettingsPage() {
     setImportResult(null);
 
     try {
-      const response = await importLibrary(
-        {
-          fullResync,
-          maxArtists
-        },
-        token
-      );
+      const response = await importLibrary({
+        fullResync,
+        maxArtists
+      });
 
       setImportResult(
         `Imported artists: ${response.result.importedArtists}, albums: ${response.result.importedAlbums}, tracks: ${response.result.importedTracks}`
