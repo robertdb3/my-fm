@@ -9,7 +9,6 @@ import type { PrismaClient } from "@prisma/client";
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
-let authToken = "";
 let stationId = "";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "music-cable-box-api-test-"));
@@ -20,9 +19,6 @@ const apiDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 beforeAll(async () => {
   process.env.NODE_ENV = "test";
   process.env.DATABASE_URL = databaseUrl;
-  process.env.JWT_SECRET = "test-secret-test-secret";
-  process.env.APP_LOGIN_EMAIL = "admin@example.com";
-  process.env.APP_LOGIN_PASSWORD = "change-me";
   process.env.SUBSONIC_CLIENT_NAME = "music-cable-box";
   process.env.SUBSONIC_API_VERSION = "1.16.1";
 
@@ -41,31 +37,11 @@ beforeAll(async () => {
   app = createApp();
   await app.ready();
 
-  const loginResponse = await app.inject({
-    method: "POST",
-    url: "/api/auth/login",
-    payload: {
-      email: "admin@example.com",
-      password: "change-me"
-    }
-  });
-
-  expect(loginResponse.statusCode).toBe(200);
-  authToken = loginResponse.json().token;
-
-  const user = await prisma.user.findUnique({
-    where: {
-      email: "admin@example.com"
-    }
-  });
-
-  if (!user) {
-    throw new Error("Expected login user to exist");
-  }
+  const localUser = await (await import("../src/services/user-service")).getLocalUser();
 
   await prisma.navidromeAccount.create({
     data: {
-      userId: user.id,
+      userId: localUser.id,
       baseUrl: "http://navidrome.local",
       username: "navidrome-user",
       token: "subsonic-token",
@@ -120,9 +96,6 @@ describe("stations endpoints", () => {
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/stations",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {
         name: "Rock Channel",
         description: "Rock-heavy station",
@@ -140,10 +113,7 @@ describe("stations endpoints", () => {
 
     const listResponse = await app.inject({
       method: "GET",
-      url: "/api/stations",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
+      url: "/api/stations"
     });
 
     expect(listResponse.statusCode).toBe(200);
@@ -151,10 +121,7 @@ describe("stations endpoints", () => {
 
     const previewByIdResponse = await app.inject({
       method: "GET",
-      url: `/api/stations/preview?stationId=${stationId}`,
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
+      url: `/api/stations/preview?stationId=${stationId}`
     });
 
     expect(previewByIdResponse.statusCode).toBe(200);
@@ -163,9 +130,6 @@ describe("stations endpoints", () => {
     const previewByRulesResponse = await app.inject({
       method: "POST",
       url: "/api/stations/preview",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {
         rules: {
           includeGenres: ["Pop"]
@@ -178,10 +142,7 @@ describe("stations endpoints", () => {
 
     const ruleOptionsResponse = await app.inject({
       method: "GET",
-      url: "/api/stations/rule-options?field=genre&q=Ro",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
+      url: "/api/stations/rule-options?field=genre&q=Ro"
     });
 
     expect(ruleOptionsResponse.statusCode).toBe(200);
@@ -189,10 +150,7 @@ describe("stations endpoints", () => {
 
     const playResponse = await app.inject({
       method: "POST",
-      url: `/api/stations/${stationId}/play`,
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
+      url: `/api/stations/${stationId}/play`
     });
 
     expect(playResponse.statusCode).toBe(200);
@@ -212,9 +170,6 @@ describe("stations endpoints", () => {
     const createNoTuneInResponse = await app.inject({
       method: "POST",
       url: "/api/stations",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {
         name: "Rock Channel No Tune",
         description: "No tune-in offsets",
@@ -233,9 +188,6 @@ describe("stations endpoints", () => {
     const noTunePlayResponse = await app.inject({
       method: "POST",
       url: `/api/stations/${noTuneStationId}/play`,
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {}
     });
 
@@ -247,9 +199,6 @@ describe("stations endpoints", () => {
     const stepResponse = await app.inject({
       method: "POST",
       url: "/api/tuner/step",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {
         direction: "NEXT",
         fromStationId: stationId,

@@ -20,7 +20,6 @@ import {
   getSettings,
   getTunerStations,
   importLibrary,
-  login,
   nextTrack,
   patchSettings,
   peekStation,
@@ -138,11 +137,7 @@ function TunerSlider({ value, min, max, onChange, onComplete }: TunerSliderProps
 }
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>("stations");
-  const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("change-me");
-  const [loginPending, setLoginPending] = useState(false);
 
   const [baseUrl, setBaseUrl] = useState("http://localhost:4533");
   const [navUsername, setNavUsername] = useState("");
@@ -173,7 +168,6 @@ export default function App() {
   const tuneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const switchRequestIdRef = useRef(0);
-  const tokenRef = useRef<string | null>(null);
   const currentTunerIndexRef = useRef(0);
   const currentStationIdRef = useRef<string | null>(null);
   const nowPlayingRef = useRef<Track | null>(null);
@@ -207,13 +201,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-
     setLoadingStations(true);
     setLoadingTuner(true);
-    Promise.all([getStations(token), getTunerStations(token)])
+    Promise.all([getStations(), getTunerStations()])
       .then(([stationItems, tunerItems]) => {
         setStations(stationItems);
         setTunerStations(tunerItems);
@@ -223,21 +213,17 @@ export default function App() {
         setLoadingStations(false);
         setLoadingTuner(false);
       });
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-
-    getSettings(token)
+    getSettings()
       .then((settings) => {
         setAudioMode(settings.audioMode);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load audio settings");
       });
-  }, [token]);
+  }, []);
 
   const stationMap = useMemo(() => {
     return new Map(stations.map((station) => [station.id, station]));
@@ -254,10 +240,6 @@ export default function App() {
   useEffect(() => {
     currentStationIdRef.current = currentStationId;
   }, [currentStationId]);
-
-  useEffect(() => {
-    tokenRef.current = token;
-  }, [token]);
 
   useEffect(() => {
     nowPlayingRef.current = nowPlaying;
@@ -292,7 +274,7 @@ export default function App() {
   }, [scanEnabled, screen]);
 
   useEffect(() => {
-    if (!scanEnabled || tunerStations.length === 0 || screen !== "radio" || !token) {
+    if (!scanEnabled || tunerStations.length === 0 || screen !== "radio") {
       if (scanIntervalRef.current) {
         clearInterval(scanIntervalRef.current);
         scanIntervalRef.current = null;
@@ -318,7 +300,7 @@ export default function App() {
         scanIntervalRef.current = null;
       }
     };
-  }, [scanEnabled, screen, token, tunerStations.length]);
+  }, [scanEnabled, screen, tunerStations.length]);
 
   function beginSwitchRequest() {
     switchRequestIdRef.current += 1;
@@ -402,29 +384,8 @@ export default function App() {
     setIsPlaying(started);
   }
 
-  async function onLogin() {
-    setError(null);
-    setStatus(null);
-    setLoginPending(true);
-
-    try {
-      const response = await login(email, password);
-      setToken(response.token);
-      setScreen("stations");
-      setStatus("Logged in");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoginPending(false);
-    }
-  }
-
   async function refreshStations() {
-    if (!token) {
-      return;
-    }
-
-    const [items, tunerItems] = await Promise.all([getStations(token), getTunerStations(token)]);
+    const [items, tunerItems] = await Promise.all([getStations(), getTunerStations()]);
     setStations(items);
     setTunerStations(tunerItems);
   }
@@ -436,10 +397,6 @@ export default function App() {
       tunerIndex?: number;
     }
   ) {
-    if (!token) {
-      return;
-    }
-
     const station = stationMap.get(stationId);
     if (station && !station.isEnabled) {
       setError("Station is disabled.");
@@ -458,7 +415,7 @@ export default function App() {
     setStatus("Loading channel...");
 
     try {
-      const response = await playStation(stationId, token, { reason: "manual" });
+      const response = await playStation(stationId, { reason: "manual" });
       if (!isLatestSwitchRequest(requestId)) {
         return;
       }
@@ -534,7 +491,7 @@ export default function App() {
   }
 
   async function stepStation(direction: "NEXT" | "PREV") {
-    if (!token || tunerStations.length === 0) {
+    if (tunerStations.length === 0) {
       return false;
     }
 
@@ -542,7 +499,7 @@ export default function App() {
     setError(null);
 
     try {
-      const response = await stepTuner(token, {
+      const response = await stepTuner({
         direction,
         fromStationId: currentStationIdRef.current ?? tunerStations[currentTunerIndexRef.current]?.id,
         wrap: true,
@@ -588,9 +545,8 @@ export default function App() {
   }
 
   async function onNext(options?: { skipped?: boolean; stopScan?: boolean }) {
-    const activeToken = tokenRef.current;
     const stationId = currentStationIdRef.current;
-    if (!activeToken || !stationId) {
+    if (!stationId) {
       return;
     }
 
@@ -611,14 +567,14 @@ export default function App() {
 
       const requestId = beginSwitchRequest();
       const [nextResponse, peekResponse] = await Promise.all([
-        nextTrack(stationId, activeToken, {
+        nextTrack(stationId, {
           previousTrackId: nowPlayingRef.current?.navidromeSongId,
           listenSeconds,
           skipped,
           previousStartOffsetSec: currentPlaybackRef.current?.startOffsetSec ?? 0,
           previousReason: currentPlaybackRef.current?.reason
         }),
-        peekStation(stationId, activeToken)
+        peekStation(stationId)
       ]);
       if (!isLatestSwitchRequest(requestId)) {
         return;
@@ -655,12 +611,12 @@ export default function App() {
   }
 
   async function onFeedback(liked: boolean) {
-    if (!token || !nowPlaying) {
+    if (!nowPlaying) {
       return;
     }
 
     try {
-      await submitFeedback(token, {
+      await submitFeedback({
         navidromeSongId: nowPlaying.navidromeSongId,
         liked,
         disliked: !liked
@@ -672,7 +628,7 @@ export default function App() {
   }
 
   async function onChangeAudioMode(nextMode: AudioMode) {
-    if (!token || nextMode === audioMode) {
+    if (nextMode === audioMode) {
       return;
     }
 
@@ -682,7 +638,7 @@ export default function App() {
     setError(null);
 
     try {
-      await patchSettings(token, {
+      await patchSettings({
         audioMode: nextMode
       });
       setStatus(
@@ -716,7 +672,6 @@ export default function App() {
           streamUrl: buildProxyStreamUrl({
             navidromeSongId: nowPlaying.navidromeSongId,
             mode: nextMode,
-            token,
             offsetSec: clampedResumeOffsetSec
           })
         };
@@ -738,14 +693,10 @@ export default function App() {
   }
 
   async function onSaveNavidrome() {
-    if (!token) {
-      return;
-    }
-
     setError(null);
 
     try {
-      await testNavidrome(token, {
+      await testNavidrome({
         baseUrl,
         username: navUsername,
         password: navPassword
@@ -757,10 +708,6 @@ export default function App() {
   }
 
   async function onImportLibrary() {
-    if (!token) {
-      return;
-    }
-
     const parsedMaxArtists = Number(maxArtists);
     if (!Number.isFinite(parsedMaxArtists) || parsedMaxArtists < 1) {
       setError("Max artists must be a positive number");
@@ -768,7 +715,7 @@ export default function App() {
     }
 
     try {
-      const response = await importLibrary(token, {
+      const response = await importLibrary({
         fullResync,
         maxArtists: parsedMaxArtists
       });
@@ -779,29 +726,6 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     }
-  }
-
-  if (!token) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.panel}>
-          <Text style={styles.title}>Music Cable Box</Text>
-          <Text style={styles.meta}>Sign in with API credentials</Text>
-          <TextInput style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" />
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
-          <TouchableOpacity style={[styles.button, styles.primary]} onPress={onLogin} disabled={loginPending}>
-            <Text style={styles.primaryLabel}>{loginPending ? "Signing in..." : "Sign in"}</Text>
-          </TouchableOpacity>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-        </View>
-      </SafeAreaView>
-    );
   }
 
   return (

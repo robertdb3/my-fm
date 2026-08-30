@@ -51,7 +51,6 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
-let authToken = "";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "music-cable-box-api-stream-test-"));
 const dbPath = join(tmpDir, "stream-test.db");
@@ -61,9 +60,6 @@ const apiDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 beforeAll(async () => {
   process.env.NODE_ENV = "test";
   process.env.DATABASE_URL = databaseUrl;
-  process.env.JWT_SECRET = "test-secret-test-secret";
-  process.env.APP_LOGIN_EMAIL = "admin@example.com";
-  process.env.APP_LOGIN_PASSWORD = "change-me";
   process.env.SUBSONIC_CLIENT_NAME = "music-cable-box";
   process.env.SUBSONIC_API_VERSION = "1.16.1";
   process.env.FFMPEG_PATH = "ffmpeg";
@@ -83,31 +79,11 @@ beforeAll(async () => {
   app = createApp();
   await app.ready();
 
-  const loginResponse = await app.inject({
-    method: "POST",
-    url: "/api/auth/login",
-    payload: {
-      email: "admin@example.com",
-      password: "change-me"
-    }
-  });
-
-  expect(loginResponse.statusCode).toBe(200);
-  authToken = loginResponse.json().token;
-
-  const user = await prisma.user.findUnique({
-    where: {
-      email: "admin@example.com"
-    }
-  });
-
-  if (!user) {
-    throw new Error("Expected login user to exist");
-  }
+  const localUser = await (await import("../src/services/user-service")).getLocalUser();
 
   await prisma.navidromeAccount.create({
     data: {
-      userId: user.id,
+      userId: localUser.id,
       baseUrl: "http://navidrome.local",
       username: "navidrome-user",
       token: "subsonic-token",
@@ -116,10 +92,10 @@ beforeAll(async () => {
   });
 
   await prisma.userSettings.upsert({
-    where: { userId: user.id },
+    where: { userId: localUser.id },
     update: { audioMode: "FM" },
     create: {
-      userId: user.id,
+      userId: localUser.id,
       audioMode: "FM"
     }
   });
@@ -141,10 +117,7 @@ describe("stream proxy endpoint", () => {
   it("reads and updates user audio settings", async () => {
     const getResponse = await app.inject({
       method: "GET",
-      url: "/api/settings",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
+      url: "/api/settings"
     });
 
     expect(getResponse.statusCode).toBe(200);
@@ -153,9 +126,6 @@ describe("stream proxy endpoint", () => {
     const patchResponse = await app.inject({
       method: "PATCH",
       url: "/api/settings",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {
         audioMode: "AM"
       }
@@ -168,7 +138,7 @@ describe("stream proxy endpoint", () => {
   it("returns audio/mpeg and uses FM profile when mode is explicit", async () => {
     const response = await app.inject({
       method: "GET",
-      url: `/api/stream/song-a?mode=FM&accessToken=${encodeURIComponent(authToken)}`
+      url: `/api/stream/song-a?mode=FM`
     });
 
     expect(response.statusCode).toBe(200);
@@ -180,7 +150,7 @@ describe("stream proxy endpoint", () => {
   it("returns audio/aac and uses AM profile when requested", async () => {
     const response = await app.inject({
       method: "GET",
-      url: `/api/stream/song-b?mode=AM&format=aac&accessToken=${encodeURIComponent(authToken)}`
+      url: `/api/stream/song-b?mode=AM&format=aac`
     });
 
     expect(response.statusCode).toBe(200);
@@ -192,7 +162,7 @@ describe("stream proxy endpoint", () => {
   it("applies offset through ffmpeg trim filters", async () => {
     const response = await app.inject({
       method: "GET",
-      url: `/api/stream/song-offset?mode=FM&offsetSec=37&accessToken=${encodeURIComponent(authToken)}`
+      url: `/api/stream/song-offset?mode=FM&offsetSec=37`
     });
 
     expect(response.statusCode).toBe(200);
@@ -204,7 +174,7 @@ describe("stream proxy endpoint", () => {
   it("uses user settings mode when mode query is omitted", async () => {
     const response = await app.inject({
       method: "GET",
-      url: `/api/stream/song-c?accessToken=${encodeURIComponent(authToken)}`
+      url: `/api/stream/song-c`
     });
 
     expect(response.statusCode).toBe(200);

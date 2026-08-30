@@ -9,7 +9,6 @@ import type { PrismaClient } from "@prisma/client";
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
-let authToken = "";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "music-cable-box-api-system-test-"));
 const dbPath = join(tmpDir, "system-test.db");
@@ -19,9 +18,6 @@ const apiDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 beforeAll(async () => {
   process.env.NODE_ENV = "test";
   process.env.DATABASE_URL = databaseUrl;
-  process.env.JWT_SECRET = "test-secret-test-secret";
-  process.env.APP_LOGIN_EMAIL = "admin@example.com";
-  process.env.APP_LOGIN_PASSWORD = "change-me";
   process.env.SUBSONIC_CLIENT_NAME = "music-cable-box";
   process.env.SUBSONIC_API_VERSION = "1.16.1";
 
@@ -40,17 +36,7 @@ beforeAll(async () => {
   app = createApp();
   await app.ready();
 
-  const loginResponse = await app.inject({
-    method: "POST",
-    url: "/api/auth/login",
-    payload: {
-      email: "admin@example.com",
-      password: "change-me"
-    }
-  });
-
-  expect(loginResponse.statusCode).toBe(200);
-  authToken = loginResponse.json().token;
+  const localUser = await (await import("../src/services/user-service")).getLocalUser();
 
   await prisma.trackCache.createMany({
     data: [
@@ -115,9 +101,6 @@ describe("system station regeneration", () => {
     const regenerateResponse = await app.inject({
       method: "POST",
       url: "/api/stations/system/regenerate",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {
         minTracks: {
           artist: 3,
@@ -133,10 +116,7 @@ describe("system station regeneration", () => {
 
     const listResponse = await app.inject({
       method: "GET",
-      url: "/api/stations?includeHidden=true",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
+      url: "/api/stations?includeHidden=true"
     });
 
     expect(listResponse.statusCode).toBe(200);
@@ -154,9 +134,6 @@ describe("system station regeneration", () => {
     const staleRegenerateResponse = await app.inject({
       method: "POST",
       url: "/api/stations/system/regenerate",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      },
       payload: {
         minTracks: {
           artist: 999,
@@ -171,10 +148,7 @@ describe("system station regeneration", () => {
 
     const visibleListResponse = await app.inject({
       method: "GET",
-      url: "/api/stations",
-      headers: {
-        authorization: `Bearer ${authToken}`
-      }
+      url: "/api/stations"
     });
 
     expect(visibleListResponse.statusCode).toBe(200);

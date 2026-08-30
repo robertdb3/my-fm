@@ -6,9 +6,6 @@ import { getOrCreateUserSettings, updateUserSettings } from "../services/user-se
 export const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/api/settings",
-    {
-      preHandler: app.authenticate
-    },
     async (request) => {
       const settings = await getOrCreateUserSettings(request.appUser.id);
       return { settings };
@@ -17,9 +14,6 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch(
     "/api/settings",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = UpdateUserSettingsSchema.safeParse(request.body);
       if (!parsed.success) {

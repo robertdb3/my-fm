@@ -8,9 +8,6 @@ import { NavidromeClient } from "../services/navidrome-client";
 export const navidromeRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/api/navidrome/test-connection",
-    {
-      preHandler: app.authenticate
-    },
     async (request, reply) => {
       const parsed = NavidromeConnectionInputSchema.safeParse(request.body);
 

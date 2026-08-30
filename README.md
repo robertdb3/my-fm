@@ -74,7 +74,7 @@ packages/
 
 ## Security Model (MVP)
 
-- App auth uses JWT sessions (`/api/auth/login`)
+- No app login: the API is single-user and expects to be reachable only over a private network (e.g. Tailscale). Do not expose it publicly.
 - Navidrome secrets:
   - Preferred path implemented: store Subsonic token material (`token` + `salt`) derived from password
   - Raw Navidrome password is not persisted in app DB
@@ -101,8 +101,6 @@ cp apps/mobile/.env.example apps/mobile/.env
 2. Edit `apps/api/.env`:
 
 - `DATABASE_URL` (SQLite path)
-- `JWT_SECRET`
-- `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD`
 - optional Subsonic client metadata
 - optional `FFMPEG_PATH` if ffmpeg binary is not available as `ffmpeg`
 - optional scrobble tuning:
@@ -141,21 +139,19 @@ Notes:
 
 ## End-to-End Usage
 
-1. Sign in using app credentials (`APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD`).
-2. Open Settings and test/save Navidrome connection.
-3. Run library import.
-4. Create stations in Stations view.
-5. (Optional) Click `Generate Stations` to auto-create Artist/Genre/Decade system channels.
-6. Tap `Surf` to start playback.
-7. Use `Next / Skip` to advance and keep station state moving.
-8. Use Like/Dislike to influence weighting.
-9. Open `Radio` for tuner-style station switching and scan mode.
+1. Open Settings and test/save Navidrome connection.
+2. Run library import.
+3. Create stations in Stations view.
+4. (Optional) Click `Generate Stations` to auto-create Artist/Genre/Decade system channels.
+5. Tap `Surf` to start playback.
+6. Use `Next / Skip` to advance and keep station state moving.
+7. Use Like/Dislike to influence weighting.
+8. Open `Radio` for tuner-style station switching and scan mode.
    - Scan steps station-to-station every ~2 seconds until stopped.
-10. Open Guide page to preview upcoming tracks without advancing state.
+9. Open Guide page to preview upcoming tracks without advancing state.
 
 ## API Surface (MVP)
 
-- `POST /api/auth/login`
 - `GET /api/health`
 - `POST /api/navidrome/test-connection`
 - `GET /api/settings`
@@ -285,7 +281,6 @@ Example:
 
 ```bash
 curl -X POST http://localhost:4000/api/stations/system/regenerate \
-  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"minTracks":{"artist":20,"genre":40,"decade":60}}'
 ```

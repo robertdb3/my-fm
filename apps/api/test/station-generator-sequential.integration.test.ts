@@ -9,7 +9,6 @@ import type { PrismaClient } from "@prisma/client";
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
-let authToken = "";
 let stationId = "";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "music-cable-box-api-seq-test-"));
@@ -20,9 +19,6 @@ const apiDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 beforeAll(async () => {
   process.env.NODE_ENV = "test";
   process.env.DATABASE_URL = databaseUrl;
-  process.env.JWT_SECRET = "test-secret-test-secret";
-  process.env.APP_LOGIN_EMAIL = "admin@example.com";
-  process.env.APP_LOGIN_PASSWORD = "change-me";
   process.env.SUBSONIC_CLIENT_NAME = "music-cable-box";
   process.env.SUBSONIC_API_VERSION = "1.16.1";
 
@@ -41,31 +37,11 @@ beforeAll(async () => {
   app = createApp();
   await app.ready();
 
-  const loginResponse = await app.inject({
-    method: "POST",
-    url: "/api/auth/login",
-    payload: {
-      email: "admin@example.com",
-      password: "change-me"
-    }
-  });
-
-  expect(loginResponse.statusCode).toBe(200);
-  authToken = loginResponse.json().token;
-
-  const user = await prisma.user.findUnique({
-    where: {
-      email: "admin@example.com"
-    }
-  });
-
-  if (!user) {
-    throw new Error("Expected login user to exist");
-  }
+  const localUser = await (await import("../src/services/user-service")).getLocalUser();
 
   await prisma.navidromeAccount.create({
     data: {
-      userId: user.id,
+      userId: localUser.id,
       baseUrl: "http://navidrome.local",
       username: "navidrome-user",
       token: "subsonic-token",
@@ -89,9 +65,6 @@ beforeAll(async () => {
   const createResponse = await app.inject({
     method: "POST",
     url: "/api/stations",
-    headers: {
-      authorization: `Bearer ${authToken}`
-    },
     payload: {
       name: "Large Rock Pool",
       description: "For non-repeat integration test",
@@ -127,10 +100,7 @@ describe("station generator sequential next", () => {
     for (let i = 0; i < 50; i += 1) {
       const nextResponse = await app.inject({
         method: "POST",
-        url: `/api/stations/${stationId}/next`,
-        headers: {
-          authorization: `Bearer ${authToken}`
-        }
+        url: `/api/stations/${stationId}/next`
       });
 
       expect(nextResponse.statusCode).toBe(200);

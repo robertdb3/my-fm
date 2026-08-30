@@ -71,18 +71,16 @@ describe("stream proxy ffmpeg profiles", () => {
 });
 
 describe("stream proxy url builder", () => {
-  it("builds a proxy url with mode and auth token", () => {
+  it("builds a proxy url with mode and offset", () => {
     const url = buildStreamProxyUrl({
       origin: "http://localhost:4000",
       navidromeSongId: "song-123",
       mode: "FM",
-      accessToken: "jwt-token",
       offsetSec: 18
     });
 
     expect(url).toContain("/api/stream/song-123");
     expect(url).toContain("mode=FM");
     expect(url).toContain("offsetSec=18");
-    expect(url).toContain("accessToken=jwt-token");
   });
 });

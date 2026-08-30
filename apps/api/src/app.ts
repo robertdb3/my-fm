@@ -1,9 +1,8 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { ZodError } from "zod";
-import { authPlugin } from "./plugins/auth";
+import { currentUserPlugin } from "./plugins/current-user";
 import { sendError, type ErrorCode } from "./lib/errors";
-import { authRoutes } from "./routes/auth";
 import { feedbackRoutes } from "./routes/feedback";
 import { healthRoutes } from "./routes/health";
 import { historyRoutes } from "./routes/history";
@@ -50,9 +49,8 @@ export function createApp() {
     credentials: true
   });
 
-  app.register(authPlugin);
+  app.register(currentUserPlugin);
   app.register(healthRoutes);
-  app.register(authRoutes);
   app.register(navidromeRoutes);
   app.register(settingsRoutes);
   app.register(libraryRoutes);

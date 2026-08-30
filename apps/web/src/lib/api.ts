@@ -15,37 +15,14 @@ import type {
 import type { TunerStation } from "@music-cable-box/shared";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const TOKEN_KEY = "music-cable-box-token";
-
-export function getAuthToken() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-
-export function setAuthToken(token: string) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(TOKEN_KEY, token);
-  }
-}
-
-export function clearAuthToken() {
-  if (typeof window !== "undefined") {
-    window.localStorage.removeItem(TOKEN_KEY);
-  }
-}
 
 export function buildProxyStreamUrl(params: {
   navidromeSongId: string;
   mode: AudioMode;
   offsetSec?: number;
-  accessToken?: string | null;
   format?: "mp3" | "aac";
   bitrateKbps?: number;
 }) {
-  const token = params.accessToken ?? getAuthToken();
   const url = new URL(`${API_BASE_URL}/api/stream/${encodeURIComponent(params.navidromeSongId)}`);
   url.searchParams.set("mode", params.mode);
   if (params.offsetSec !== undefined && params.offsetSec > 0) {
@@ -56,9 +33,6 @@ export function buildProxyStreamUrl(params: {
   }
   if (params.bitrateKbps !== undefined) {
     url.searchParams.set("bitrateKbps", String(Math.floor(params.bitrateKbps)));
-  }
-  if (token) {
-    url.searchParams.set("accessToken", token);
   }
   return url.toString();
 }
@@ -78,14 +52,10 @@ export async function apiRequest<T>(
   options: {
     method?: string;
     body?: unknown;
-    token?: string | null;
   } = {}
 ): Promise<T> {
-  const token = options.token ?? getAuthToken();
   const hasBody = options.body !== undefined;
-  const headers: Record<string, string> = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  };
+  const headers: Record<string, string> = {};
 
   if (hasBody) {
     headers["Content-Type"] = "application/json";
@@ -107,24 +77,10 @@ export async function apiRequest<T>(
   return json as T;
 }
 
-export async function login(email: string, password: string) {
-  return apiRequest<{ token: string; user: { id: string; email: string | null } }>("/api/auth/login", {
-    method: "POST",
-    body: {
-      email,
-      password
-    },
-    token: null
-  });
-}
-
-export async function getStations(
-  token?: string | null,
-  options?: {
-    includeHidden?: boolean;
-    includeSystem?: boolean;
-  }
-) {
+export async function getStations(options?: {
+  includeHidden?: boolean;
+  includeSystem?: boolean;
+}) {
   const params = new URLSearchParams();
   if (options?.includeHidden !== undefined) {
     params.set("includeHidden", String(options.includeHidden));
@@ -134,57 +90,44 @@ export async function getStations(
   }
 
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  const data = await apiRequest<{ stations: Station[] }>(`/api/stations${suffix}`, { token });
+  const data = await apiRequest<{ stations: Station[] }>(`/api/stations${suffix}`);
   return data.stations;
 }
 
-export async function getTunerStations(token?: string | null) {
-  const data = await apiRequest<{ stations: TunerStation[] }>("/api/stations/tuner", { token });
+export async function getTunerStations() {
+  const data = await apiRequest<{ stations: TunerStation[] }>("/api/stations/tuner");
   return data.stations;
 }
 
-export async function getRuleOptions(
-  field: "genre" | "artist" | "album",
-  query: string,
-  token?: string | null
-) {
+export async function getRuleOptions(field: "genre" | "artist" | "album", query: string) {
   const params = new URLSearchParams({
     field,
     q: query,
     limit: "20"
   });
 
-  return apiRequest<{ options: string[] }>(`/api/stations/rule-options?${params.toString()}`, { token });
+  return apiRequest<{ options: string[] }>(`/api/stations/rule-options?${params.toString()}`);
 }
 
-export async function previewStationRules(
-  payload: {
-    stationId?: string;
-    rules?: StationRules;
-  },
-  token?: string | null
-) {
+export async function previewStationRules(payload: { stationId?: string; rules?: StationRules }) {
   return apiRequest<{ matchingTrackCount: number }>("/api/stations/preview", {
     method: "POST",
-    body: payload,
-    token
+    body: payload
   });
 }
 
-export async function createStationApi(input: CreateStationInput, token?: string | null) {
+export async function createStationApi(input: CreateStationInput) {
   const data = await apiRequest<{ station: Station }>("/api/stations", {
     method: "POST",
-    body: input,
-    token
+    body: input
   });
   return data.station;
 }
 
-export async function updateStationApi(stationId: string, input: Partial<CreateStationInput>, token?: string | null) {
+export async function updateStationApi(stationId: string, input: Partial<CreateStationInput>) {
   const data = await apiRequest<{ station: Station }>(`/api/stations/${stationId}`, {
     method: "PUT",
-    body: input,
-    token
+    body: input
   });
   return data.station;
 }
@@ -194,27 +137,23 @@ export async function patchStationApi(
   input: {
     isEnabled?: boolean;
     isHidden?: boolean;
-  },
-  token?: string | null
+  }
 ) {
   const data = await apiRequest<{ station: Station }>(`/api/stations/${stationId}`, {
     method: "PATCH",
-    body: input,
-    token
+    body: input
   });
   return data.station;
 }
 
-export async function deleteStationApi(stationId: string, token?: string | null) {
+export async function deleteStationApi(stationId: string) {
   return apiRequest<{ ok: boolean }>(`/api/stations/${stationId}`, {
-    method: "DELETE",
-    token
+    method: "DELETE"
   });
 }
 
 export async function startStation(
   stationId: string,
-  token?: string | null,
   payload?: {
     seed?: string;
     reason?: "manual" | "resume";
@@ -224,31 +163,25 @@ export async function startStation(
     `/api/stations/${stationId}/play`,
     {
       method: "POST",
-      body: payload ?? {},
-      token
+      body: payload ?? {}
     }
   );
 }
 
-export async function stepTuner(
-  token?: string | null,
-  payload?: {
-    direction: "NEXT" | "PREV";
-    fromStationId?: string;
-    wrap?: boolean;
-    play?: boolean;
-  }
-) {
+export async function stepTuner(payload?: {
+  direction: "NEXT" | "PREV";
+  fromStationId?: string;
+  wrap?: boolean;
+  play?: boolean;
+}) {
   return apiRequest<TunerStepResponse>("/api/tuner/step", {
     method: "POST",
-    body: payload ?? { direction: "NEXT", wrap: true, play: true },
-    token
+    body: payload ?? { direction: "NEXT", wrap: true, play: true }
   });
 }
 
 export async function nextStationTrack(
   stationId: string,
-  token?: string | null,
   payload?: {
     previousTrackId?: string;
     listenSeconds?: number;
@@ -259,27 +192,23 @@ export async function nextStationTrack(
 ) {
   return apiRequest<{ track: Track; playback?: NextPlayback }>(`/api/stations/${stationId}/next`, {
     method: "POST",
-    body: payload ?? {},
-    token
+    body: payload ?? {}
   });
 }
 
-export async function peekStation(stationId: string, n = 10, token?: string | null) {
-  return apiRequest<{ tracks: Track[] }>(`/api/stations/${stationId}/peek?n=${n}`, { token });
+export async function peekStation(stationId: string, n = 10) {
+  return apiRequest<{ tracks: Track[] }>(`/api/stations/${stationId}/peek?n=${n}`);
 }
 
-export async function regenerateSystemStations(
-  payload: {
-    types?: StationSystemType[];
-    minTracks?: {
-      artist?: number;
-      genre?: number;
-      decade?: number;
-    };
-    dryRun?: boolean;
-  },
-  token?: string | null
-) {
+export async function regenerateSystemStations(payload: {
+  types?: StationSystemType[];
+  minTracks?: {
+    artist?: number;
+    genre?: number;
+    decade?: number;
+  };
+  dryRun?: boolean;
+}) {
   return apiRequest<{
     created: number;
     updated: number;
@@ -288,39 +217,31 @@ export async function regenerateSystemStations(
     sample: Array<{ type: StationSystemType; key: string; action: string }>;
   }>("/api/stations/system/regenerate", {
     method: "POST",
-    body: payload,
-    token
+    body: payload
   });
 }
 
-export async function getSettings(token?: string | null) {
-  const data = await apiRequest<{ settings: UserSettings }>("/api/settings", { token });
+export async function getSettings() {
+  const data = await apiRequest<{ settings: UserSettings }>("/api/settings");
   return data.settings;
 }
 
-export async function patchSettings(
-  input: {
-    audioMode?: AudioMode;
-  },
-  token?: string | null
-) {
+export async function patchSettings(input: { audioMode?: AudioMode }) {
   const data = await apiRequest<{ settings: UserSettings }>("/api/settings", {
     method: "PATCH",
-    body: input,
-    token
+    body: input
   });
   return data.settings;
 }
 
-export async function saveFeedback(payload: FeedbackInput, token?: string | null) {
+export async function saveFeedback(payload: FeedbackInput) {
   return apiRequest<{ feedback: unknown }>("/api/feedback", {
     method: "POST",
-    body: payload,
-    token
+    body: payload
   });
 }
 
-export async function testNavidromeConnection(payload: NavidromeConnectionInput, token?: string | null) {
+export async function testNavidromeConnection(payload: NavidromeConnectionInput) {
   return apiRequest<{
     ok: boolean;
     account: {
@@ -334,12 +255,11 @@ export async function testNavidromeConnection(payload: NavidromeConnectionInput,
     };
   }>("/api/navidrome/test-connection", {
     method: "POST",
-    body: payload,
-    token
+    body: payload
   });
 }
 
-export async function importLibrary(payload: { fullResync?: boolean; maxArtists?: number }, token?: string | null) {
+export async function importLibrary(payload: { fullResync?: boolean; maxArtists?: number }) {
   return apiRequest<{
     ok: boolean;
     result: {
@@ -349,8 +269,7 @@ export async function importLibrary(payload: { fullResync?: boolean; maxArtists?
     };
   }>("/api/library/import", {
     method: "POST",
-    body: payload,
-    token
+    body: payload
   });
 }
 
